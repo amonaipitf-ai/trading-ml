@@ -13,6 +13,12 @@ mergeK   = input.float(0.15, "รวมระดับที่ห่างก�
 showPlan = input.bool(true, "แสดงแผน Buy/Sell (SL / TP)")
 showPiv  = input.bool(true, "แสดงเส้น Pivot")
 showLbl  = input.bool(true, "แสดงตัวเลขด้านขวา")
+showEma  = input.bool(true, "แสดง EMA")
+emaLen   = input.int(50, "EMA length", minval = 1)
+showMacd = input.bool(true, "แสดงจุดตัด MACD (▲ ตัดขึ้น / ▼ ตัดลง)")
+macdFast = input.int(12, "MACD fast", minval = 1)
+macdSlow = input.int(26, "MACD slow", minval = 1)
+macdSig  = input.int(9, "MACD signal", minval = 1)
 
 // ---------- ข้อมูลรายวัน (แท่งวันก่อนที่ปิดแล้ว ไม่ repaint) ----------
 [dH, dL, dC, atr, h5, l5, h20, l20] = request.security(syminfo.tickerid, "D",
@@ -115,6 +121,16 @@ if barstate.islast
         addLine(sellSL, RED, line.style_dotted, "Sell SL", t0, tx)
         addLine(sellTP1, GOLD, line.style_dotted, "Sell TP1", t0, tx)
         addLine(sellTP2, GOLD, line.style_dotted, "Sell TP2", t0, tx)
+
+// ---------- EMA และจุดตัด MACD ----------
+plot(showEma ? ta.ema(close, emaLen) : na, "EMA", color = color.new(#5B9BF0, 0), linewidth = 2)
+[macdLine, sigLine, _] = ta.macd(close, macdFast, macdSlow, macdSig)
+crossUp = ta.crossover(macdLine, sigLine)
+crossDn = ta.crossunder(macdLine, sigLine)
+plotshape(showMacd and crossUp, "MACD ตัดขึ้น", shape.triangleup, location.belowbar, color.new(#2FBF71, 0), size = size.tiny)
+plotshape(showMacd and crossDn, "MACD ตัดลง", shape.triangledown, location.abovebar, color.new(#F0565A, 0), size = size.tiny)
+alertcondition(crossUp, "MACD ตัดขึ้น", "{{ticker}} MACD ตัดขึ้น ราคา {{close}}")
+alertcondition(crossDn, "MACD ตัดลง", "{{ticker}} MACD ตัดลง ราคา {{close}}")
 
 // ---------- แจ้งเตือน (ตั้งใน TradingView: Alert > Condition > Amon Levels) ----------
 alertcondition(low <= buyHi and high >= buyLo, "ราคาเข้าโซน Buy", "{{ticker}} เข้าโซน Buy (S1) ราคา {{close}} – รอแท่งยืนยันก่อนเข้า")
