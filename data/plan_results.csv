@@ -1,0 +1,7 @@
+plan_created_utc,bar_date,asset,side,outcome,r,entry_time_utc
+2026-10-13T18:15:07+00:00,2026-10-12,XAUUSD,buy,no_entry,0.0,
+2026-10-13T18:15:07+00:00,2026-10-12,XAUUSD,sell,no_entry,0.0,
+2026-10-13T18:15:07+00:00,2026-10-12,USOIL,buy,no_entry,0.0,
+2026-10-13T18:15:07+00:00,2026-10-12,USOIL,sell,open,0.0,2026-10-13T18:30:00+00:00
+2026-10-13T18:15:07+00:00,2026-10-12,DXY,buy,no_entry,0.0,
+2026-10-13T18:15:07+00:00,2026-10-12,DXY,sell,no_entry,0.0,
