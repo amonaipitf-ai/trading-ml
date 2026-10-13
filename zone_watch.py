@@ -17,6 +17,7 @@ from plan_track import evaluate_side, load_plans
 STATE = "data/watch_state.json"
 TH = timezone(timedelta(hours=7))
 MAX_AGE = timedelta(hours=30)   # แผนเก่ากว่านี้ไม่เฝ้าแล้ว
+QUIET = (23, 5)                 # ไม่ส่งแจ้งเตือนช่วง 23:00–04:59 น. เวลาไทย
 
 
 def f(v, dec):
@@ -56,7 +57,8 @@ def send(texts):
     if not token:
         print("::error::ยังไม่ได้ตั้ง Secret LINE_CHANNEL_ACCESS_TOKEN")
         sys.exit(1)
-    payload = {"messages": [{"type": "text", "text": t} for t in texts[:5]]}
+    payload = {"messages": [{"type": "text", "text": t} for t in texts[:5]],
+               "notificationDisabled": True}  # ส่งแบบไม่มีเสียงเตือน
     url = "https://api.line.me/v2/bot/message/" + ("push" if to else "broadcast")
     if to:
         payload["to"] = to
@@ -71,6 +73,10 @@ def send(texts):
 
 
 def main():
+    hour = datetime.now(TH).hour
+    if hour >= QUIET[0] or hour < QUIET[1]:
+        print("ช่วงเวลางดแจ้งเตือน (23:00–05:00 น.)")
+        return
     plans = load_plans()
     if not plans:
         print("ยังไม่มีแผน (data/plan_today.json)")

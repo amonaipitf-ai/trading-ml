@@ -21,7 +21,7 @@ Workflow **LINE morning brief** (`.github/workflows/line-brief.yml`) รัน `
 ทดสอบ: แท็บ **Actions › LINE morning brief › Run workflow**
 
 ### แจ้งเตือนเมื่อราคาเข้าโซน + บันทึกผลแผน
-- `zone_watch.py` (workflow **Zone watch**) เช็กราคา 15 นาที ทุก 15–30 นาที วันจันทร์–ศุกร์ ส่ง LINE ครั้งเดียวเมื่อราคาแตะโซน Buy/Sell ของแผนวันนั้น
+- `zone_watch.py` (workflow **Zone watch**) เช็กราคา 15 นาที ทุก 15–30 นาที วันจันทร์–ศุกร์ 08:00–22:59 น. ส่ง LINE ครั้งเดียวเมื่อราคาแตะโซน Buy/Sell ของแผนวันนั้น (ไม่แจ้งช่วง 23:00–05:00 น.; ทุกข้อความไม่มีเสียงเตือน)
 - `plan_track.py` บันทึกแผนวันนี้ใน `data/plan_today.json` และวัดผลแผนรอบก่อน (ถึง TP1/TP2, โดน SL, ไม่เข้าโซน) ลง `data/plan_results.csv` การ์ดตอนเช้าแสดงผลรอบก่อนและสถิติสะสม
 
 ## ไฟล์สำคัญ
