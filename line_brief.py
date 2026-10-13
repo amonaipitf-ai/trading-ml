@@ -225,6 +225,8 @@ def send(messages):
         json.dump(messages, fh, ensure_ascii=False, indent=1)
     if not token:
         print("ไม่มี LINE_CHANNEL_ACCESS_TOKEN — บันทึกข้อความไว้ที่ output/line_message.json แต่ไม่ได้ส่ง")
+        if os.environ.get("GITHUB_ACTIONS"):
+            sys.exit("ยังไม่ได้ตั้ง Secret LINE_CHANNEL_ACCESS_TOKEN ใน GitHub")  # ให้ Actions ขึ้นสีแดง
         return
     url = "https://api.line.me/v2/bot/message/" + ("push" if to else "broadcast")
     payload = {"messages": messages}
