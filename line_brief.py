@@ -73,15 +73,13 @@ def plan(row) -> dict:
     return out
 
 
-def overview(row, fc) -> tuple:
+def overview(row) -> tuple:
     trend = row["trend"]
     bullets = [
         f"แนวโน้ม (MA50/200): {trend} · ราคา{row['price_vs_ma20']} MA20",
         f"RSI {row['rsi14']} ({row['rsi_state']}) · MACD {row['macd_state']}",
         f"กรอบแกว่งวันนี้ (±ATR) {row['expected_range_low']} – {row['expected_range_high']}",
     ]
-    if fc is not None:
-        bullets.append(f"AI 5 วัน: โอกาสขึ้น {fc['prob_up'] * 100:.0f}% · {fc['reliability']}")
     if trend == "ขาขึ้น":
         advice = "เน้น Buy เมื่อย่อถึงแนวรับ · Sell แค่เก็บสั้น"
     elif trend == "ขาลง":
@@ -134,13 +132,66 @@ def plan_box(title, p, dec, buy):
             "backgroundColor": "#0F1B16" if buy else "#1D1012", "contents": items}
 
 
-def bubble(row, fc):
+# ---------- ปฏิทินข่าว (ForexFactory, ฟรี ไม่ต้องใช้ key) ----------
+CAL_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+OIL_NEWS = ("crude oil inventories", "natural gas storage", "opec")
+
+
+def load_calendar():
+    """ข่าวสหรัฐความแรงสูง + ข่าวน้ำมัน ในช่วง 24 ชม. ข้างหน้า (เวลาไทย). คืน None ถ้าดึงไม่ได้"""
+    try:
+        req = urllib.request.Request(CAL_URL, headers={"User-Agent": "Mozilla/5.0"})
+        events = json.loads(urllib.request.urlopen(req, timeout=30).read())
+    except Exception as e:
+        print(f"::warning::ดึงปฏิทินข่าวไม่ได้ ({type(e).__name__})")
+        return None
+    now = datetime.now(TH)
+    out = []
+    for ev in events:
+        try:
+            t = datetime.fromisoformat(ev["date"]).astimezone(TH)
+        except Exception:
+            continue
+        if not (now - timedelta(hours=1) <= t < now + timedelta(hours=24)):
+            continue
+        title = str(ev.get("title", ""))
+        oil = any(k in title.lower() for k in OIL_NEWS)
+        usd_high = ev.get("country") == "USD" and ev.get("impact") == "High"
+        if usd_high or oil:
+            out.append({"t": t, "title": title, "oil": oil and not usd_high,
+                        "fc": ev.get("forecast") or "", "prev": ev.get("previous") or ""})
+    return sorted(out, key=lambda e: e["t"])
+
+
+def news_box(asset, cal):
+    if cal is None:
+        return [txt("ข่าวสำคัญ: ดึงปฏิทินข่าวไม่ได้ เช็กเองก่อนเข้าเทรด", size="xs", color=MUTED)]
+    items = [e for e in cal if not e["oil"] or asset == "USOIL"]
+    head = txt("ข่าวสำคัญ 24 ชม.ข้างหน้า (เวลาไทย)", color="#F5CD75", weight="bold", margin="md")
+    if not items:
+        return [head, txt("ไม่มีข่าวแรงของสหรัฐ", size="xs", color=MUTED)]
+    rows = []
+    for e in items[:5]:
+        extra = " · ".join(x for x in (f"คาด {e['fc']}" if e["fc"] else "", f"ก่อน {e['prev']}" if e["prev"] else "") if x)
+        rows.append({"type": "box", "layout": "horizontal", "contents": [
+            txt(e["t"].strftime("%a %H:%M").replace("Mon", "จ.").replace("Tue", "อ.").replace("Wed", "พ.")
+                .replace("Thu", "พฤ.").replace("Fri", "ศ.").replace("Sat", "ส.").replace("Sun", "อา."),
+                size="xs", color="#F5CD75", flex=3),
+            txt(e["title"] + (f" ({extra})" if extra else ""), size="xs", flex=8),
+        ]})
+    first = items[0]["t"].strftime("%H:%M")
+    warn = txt(f"⚠ มีข่าวแรง เลี่ยงเปิดออร์เดอร์ใหม่ช่วง 30 นาทีก่อน–หลังข่าว (แรกสุด {first} น.)",
+               size="xs", color="#F5CD75")
+    return [head, *rows, warn]
+
+
+def bubble(row, cal):
     m = META[row["asset"]]
     dec = m["dec"]
     atr = float(row["atr14"])
     hw = HALF_ZONE * atr
     pl = plan(row)
-    bullets, advice = overview(row, fc)
+    bullets, advice = overview(row)
     bar = datetime.strptime(row["bar_date"], "%Y-%m-%d")
 
     zones = []
@@ -166,6 +217,7 @@ def bubble(row, fc):
          "backgroundColor": m["accent"], "margin": "sm",
          "contents": [txt(advice, size="xs", color="#1A1204", weight="bold", align="center")]},
     ]
+    body += news_box(row["asset"], cal)
     if "buy" in pl:
         body += [plan_box("แผน Buy (ฝั่งซื้อ)", pl["buy"], dec, True),
                  plan_box("แผน Sell (ฝั่งขาย)", pl["sell"], dec, False)]
@@ -192,23 +244,15 @@ def bubble(row, fc):
     }
 
 
-def load_forecast():
-    path = os.path.join(OUT, "forecast_latest_h5.csv")
-    if not os.path.exists(path):
-        return {}
-    df = pd.read_csv(path)
-    return {r["asset"]: r for _, r in df.iterrows()}
-
-
 def build_messages():
     levels = pd.read_csv(os.path.join(OUT, "levels.csv"))
-    fcs = load_forecast()
+    cal = load_calendar()
     today = thai_date(datetime.now(TH))
     # แยกเป็น 3 ข้อความ ตัวละ 1 หน้า (XAUUSD, USOIL, DXY)
     return [
         {"type": "flex",
          "altText": f"{r['asset']} {today} · ปิด {r['close']} · S1 {r['support_1']} / R1 {r['resistance_1']}",
-         "contents": bubble(r, fcs.get(META[r["asset"]]["fc"]))}
+         "contents": bubble(r, cal)}
         for _, r in levels.iterrows() if r["asset"] in META
     ]
 
