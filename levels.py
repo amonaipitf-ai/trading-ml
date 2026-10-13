@@ -21,7 +21,7 @@ OUT = "output"
 
 # แต่ละตัวลองแหล่งข้อมูลตามลำดับ ใช้แหล่งแรกที่ได้ข้อมูลล่าสุด
 SOURCES = {
-    "XAUUSD": [("stooq", "xauusd"), ("yahoo", "GC=F")],  # spot ก่อน, ไม่ได้ค่อยใช้ฟิวเจอร์ส
+    "XAUUSD": [("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],  # spot ก่อน, ไม่ได้ค่อยใช้ฟิวเจอร์ส
     "USOIL": [("yahoo", "CL=F")],
     "DXY": [("yahoo", "DX-Y.NYB")],
 }
@@ -45,6 +45,9 @@ def from_stooq(symbol: str) -> pd.DataFrame:
     return df[["Open", "High", "Low", "Close"]].dropna().tail(130)
 
 
+ERRORS = {}
+
+
 def load(asset: str):
     for kind, sym in SOURCES[asset]:
         try:
@@ -55,6 +58,9 @@ def load(asset: str):
                 return df, f"{kind}:{sym}"
         except Exception as e:  # ลองแหล่งถัดไป
             print(f"  {asset}: {kind}:{sym} ใช้ไม่ได้ ({type(e).__name__})")
+            ERRORS.setdefault(asset, []).append(f"{kind}:{sym}={type(e).__name__}")
+            continue
+        ERRORS.setdefault(asset, []).append(f"{kind}:{sym}=no recent data")
     raise RuntimeError(f"ดึงข้อมูล {asset} ไม่ได้จากทุกแหล่ง")
 
 
@@ -126,6 +132,7 @@ def main():
         df = drop_unfinished_bar(df)
         row = compute(asset, df)
         row["source"] = src
+        row["source_notes"] = "; ".join(ERRORS.get(asset, []))
         rows.append(row)
         print(f"{asset:<7} ปิด {row['close']} | แนวต้าน {row['resistance_1']}, {row['resistance_2']} "
               f"| แนวรับ {row['support_1']}, {row['support_2']} | ATR {row['atr14']} ({src})")
