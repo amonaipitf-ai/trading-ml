@@ -226,7 +226,8 @@ def send(messages):
     if not token:
         print("ไม่มี LINE_CHANNEL_ACCESS_TOKEN — บันทึกข้อความไว้ที่ output/line_message.json แต่ไม่ได้ส่ง")
         if os.environ.get("GITHUB_ACTIONS"):
-            sys.exit("ยังไม่ได้ตั้ง Secret LINE_CHANNEL_ACCESS_TOKEN ใน GitHub")  # ให้ Actions ขึ้นสีแดง
+            print("::error::ยังไม่ได้ตั้ง Secret LINE_CHANNEL_ACCESS_TOKEN ใน GitHub")
+            sys.exit(1)  # ให้ Actions ขึ้นสีแดง
         return
     url = "https://api.line.me/v2/bot/message/" + ("push" if to else "broadcast")
     payload = {"messages": messages}
@@ -236,9 +237,10 @@ def send(messages):
         "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            print(f"ส่ง LINE สำเร็จ ({'push' if to else 'broadcast'}) HTTP {r.status}")
+            print(f"::notice::ส่ง LINE สำเร็จ ({'push' if to else 'broadcast'}) HTTP {r.status}")
     except urllib.error.HTTPError as e:
-        print(f"ส่ง LINE ไม่สำเร็จ HTTP {e.code}: {e.read().decode(errors='replace')}")
+        detail = e.read().decode(errors="replace").replace("\n", " ")[:300]
+        print(f"::error::ส่ง LINE ไม่สำเร็จ HTTP {e.code} ({'push' if to else 'broadcast'}, LINE_TO {'มี' if to else 'ไม่มี'}): {detail}")
         sys.exit(1)
 
 
