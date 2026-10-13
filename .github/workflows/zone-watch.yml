@@ -36,4 +36,4 @@ jobs:
           for f in data/watch_state.json; do [ -f "$f" ] && git add "$f"; done
           git diff --cached --quiet && exit 0
           git commit -m "watch $(date -u +%Y-%m-%dT%H:%M)"
-          git pull --rebase -q && git push -q
+          git pull --rebase --autostash -q && git push -q
