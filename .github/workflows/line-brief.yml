@@ -45,7 +45,7 @@ jobs:
         run: |
           git config user.name "forecast-bot"
           git config user.email "forecast-bot@users.noreply.github.com"
-          git add data/plan_today.json data/plan_results.csv 2>/dev/null || true
+          for f in data/plan_today.json data/plan_results.csv; do [ -f "$f" ] && git add "$f"; done
           git diff --cached --quiet && exit 0
           git commit -m "plan $(date -u +%Y-%m-%d)"
           git pull --rebase -q && git push -q
