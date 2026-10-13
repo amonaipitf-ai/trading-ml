@@ -203,17 +203,13 @@ def load_forecast():
 def build_messages():
     levels = pd.read_csv(os.path.join(OUT, "levels.csv"))
     fcs = load_forecast()
-    bubbles = [bubble(r, fcs.get(META[r["asset"]]["fc"])) for _, r in levels.iterrows() if r["asset"] in META]
-    today = datetime.now(TH)
-    lines = [f"☀️ สรุปตลาดเช้า {thai_date(today)}"]
-    for _, r in levels.iterrows():
-        lines.append(f"{r['asset']}: ปิด {r['close']} · {r['trend']} · "
-                     f"S1 {r['support_1']} / R1 {r['resistance_1']}")
-    lines.append("เลื่อนการ์ดด้านล่างเพื่อดูแผน Buy/Sell")
+    today = thai_date(datetime.now(TH))
+    # แยกเป็น 3 ข้อความ ตัวละ 1 หน้า (XAUUSD, USOIL, DXY)
     return [
-        {"type": "text", "text": "\n".join(lines)},
-        {"type": "flex", "altText": f"สรุปตลาด {thai_date(today)} · XAUUSD USOIL DXY",
-         "contents": {"type": "carousel", "contents": bubbles}},
+        {"type": "flex",
+         "altText": f"{r['asset']} {today} · ปิด {r['close']} · S1 {r['support_1']} / R1 {r['resistance_1']}",
+         "contents": bubble(r, fcs.get(META[r["asset"]]["fc"]))}
+        for _, r in levels.iterrows() if r["asset"] in META
     ]
 
 
