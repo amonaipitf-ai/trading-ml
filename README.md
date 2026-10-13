@@ -16,6 +16,7 @@ Workflow **LINE morning brief** (`.github/workflows/line-brief.yml`) รัน `
 ต้องตั้ง Secrets ใน **Settings › Secrets and variables › Actions**
 - `LINE_CHANNEL_ACCESS_TOKEN` — token ของ LINE Official Account (จำเป็น)
 - `LINE_TO` — User ID ผู้รับ (ไม่บังคับ; ถ้าไม่ใส่จะ broadcast ถึงทุกคนที่เพิ่มเพื่อน OA)
+- `TWELVEDATA_API_KEY` — key ฟรีจาก twelvedata.com ใช้ดึงราคาทอง **spot** XAU/USD (ไม่ใส่ = ใช้ฟิวเจอร์ส GC=F แทน)
 
 ทดสอบ: แท็บ **Actions › LINE morning brief › Run workflow**
 

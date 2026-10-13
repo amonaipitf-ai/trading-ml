@@ -30,6 +30,8 @@ jobs:
 
       - name: แนวรับ-แนวต้านรายวัน
         continue-on-error: true
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python levels.py
 
       - name: Forecast 5 วันทำการ (ดาวน์โหลดราคาใหม่)

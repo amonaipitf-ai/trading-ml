@@ -12,7 +12,9 @@
 """
 
 import io
+import json
 import os
+import urllib.parse
 import urllib.request
 
 import pandas as pd
@@ -21,7 +23,8 @@ OUT = "output"
 
 # แต่ละตัวลองแหล่งข้อมูลตามลำดับ ใช้แหล่งแรกที่ได้ข้อมูลล่าสุด
 SOURCES = {
-    "XAUUSD": [("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],  # spot ก่อน, ไม่ได้ค่อยใช้ฟิวเจอร์ส
+    # spot ก่อน (Twelve Data ต้องมี Secret TWELVEDATA_API_KEY), ไม่ได้ค่อยใช้ฟิวเจอร์ส
+    "XAUUSD": [("twelvedata", "XAU/USD"), ("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],
     "USOIL": [("yahoo", "CL=F")],
     "DXY": [("yahoo", "DX-Y.NYB")],
 }
@@ -45,13 +48,50 @@ def from_stooq(symbol: str) -> pd.DataFrame:
     return df[["Open", "High", "Low", "Close"]].dropna().tail(500)
 
 
+def from_twelvedata(symbol: str) -> pd.DataFrame:
+    """ราคา spot รายชั่วโมงจาก Twelve Data แล้วรวมเป็นแท่งรายวันแบบโบรกเกอร์ (ตัดวันที่ 17:00 นิวยอร์ก)"""
+    key = os.environ.get("TWELVEDATA_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("no TWELVEDATA_API_KEY")
+    q = urllib.parse.urlencode({"symbol": symbol, "interval": "1h", "outputsize": 5000,
+                                "timezone": "America/New_York", "apikey": key})
+    data = json.loads(urllib.request.urlopen(f"https://api.twelvedata.com/time_series?{q}", timeout=60).read())
+    if data.get("status") != "ok":
+        raise RuntimeError(f"twelvedata: {str(data.get('message', ''))[:120]}")
+    return hourly_to_daily(pd.DataFrame(data["values"]))
+
+
+def hourly_to_daily(h: pd.DataFrame, now_ny=None) -> pd.DataFrame:
+    """แท่ง 1 ชม. (เวลานิวยอร์ก) -> แท่งรายวัน วันใหม่เริ่ม 17:00 NY (= เลื่อนเวลา +7 ชม. แล้วตัดเที่ยงคืน)
+    ตัดแท่งวันล่าสุดทิ้งถ้าเพิ่งเริ่มไม่ถึง 20 ชม. (ยังไม่ปิด)"""
+    h = h.copy()
+    h.index = pd.to_datetime(h["datetime"])
+    h = h[["open", "high", "low", "close"]].astype(float).sort_index()
+    day = (h.index + pd.Timedelta(hours=7)).normalize()
+    d = h.groupby(day).agg(Open=("open", "first"), High=("high", "max"), Low=("low", "min"),
+                           Close=("close", "last"), n=("close", "size"))
+    d = d[d["n"] >= 3].drop(columns="n")
+    d.index.name = "Date"
+    now_ny = now_ny if now_ny is not None else pd.Timestamp.now(tz="America/New_York").tz_localize(None)
+    session_start = d.index[-1] - pd.Timedelta(hours=7)
+    if now_ny - session_start < pd.Timedelta(hours=20):
+        d = d.iloc[:-1]
+    return d
+
+
+def fetch(kind: str, sym: str) -> pd.DataFrame:
+    if kind == "twelvedata":
+        return from_twelvedata(sym)
+    return from_stooq(sym) if kind == "stooq" else from_yahoo(sym)
+
+
 ERRORS = {}
 
 
 def load(asset: str):
     for kind, sym in SOURCES[asset]:
         try:
-            df = from_stooq(sym) if kind == "stooq" else from_yahoo(sym)
+            df = fetch(kind, sym)
             df = df[(df["High"] >= df["Low"]) & (df["Close"] > 0)]
             # ต้องมีข้อมูลพอและไม่เก่าเกิน 5 วัน
             if len(df) >= 30 and (pd.Timestamp.now("UTC").tz_localize(None) - df.index[-1]).days <= 5:

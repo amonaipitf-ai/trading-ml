@@ -29,6 +29,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: แนวรับ-แนวต้านล่าสุด
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python levels.py
 
       - name: ส่งสรุปเข้า LINE
