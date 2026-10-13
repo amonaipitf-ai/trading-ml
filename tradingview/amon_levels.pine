@@ -1,0 +1,123 @@
+//@version=6
+// Amon AI – แนวรับแนวต้าน & แผนเทรด (สูตรเดียวกับการ์ด LINE ตอนเช้า)
+// - Classic Pivot จาก High/Low/Close ของแท่งวันก่อน + จุดสูง/ต่ำ 5 และ 20 วัน
+// - เลือกแนวต้าน/แนวรับที่ใกล้ราคาปิดที่สุด 2 ระดับ (ระดับที่ห่างกันไม่ถึง 0.15 ATR รวมเป็นโซนเดียว)
+// - โซนกว้าง ±0.08 ATR, SL ห่างขอบโซน 0.25 ATR (ATR = ค่าเฉลี่ย True Range 14 วัน)
+// ใช้ได้ทุก Timeframe (แนะนำ M15/H1) · ไม่ใช่คำแนะนำการลงทุน
+indicator("Amon AI – แนวรับแนวต้าน & แผนเทรด", shorttitle = "Amon Levels", overlay = true,
+     max_boxes_count = 20, max_lines_count = 40, max_labels_count = 30)
+
+halfZone = input.float(0.08, "ครึ่งความกว้างโซน (x ATR)", minval = 0.01, step = 0.01)
+stopPad  = input.float(0.25, "ระยะ SL จากขอบโซน (x ATR)", minval = 0.05, step = 0.05)
+mergeK   = input.float(0.15, "รวมระดับที่ห่างกันไม่ถึง (x ATR)", minval = 0.0, step = 0.05)
+showPlan = input.bool(true, "แสดงแผน Buy/Sell (SL / TP)")
+showPiv  = input.bool(true, "แสดงเส้น Pivot")
+showLbl  = input.bool(true, "แสดงตัวเลขด้านขวา")
+
+// ---------- ข้อมูลรายวัน (แท่งวันก่อนที่ปิดแล้ว ไม่ repaint) ----------
+[dH, dL, dC, atr, h5, l5, h20, l20] = request.security(syminfo.tickerid, "D",
+     [high[1], low[1], close[1], ta.sma(ta.tr(true), 14)[1],
+      ta.highest(high, 5)[1], ta.lowest(low, 5)[1], ta.highest(high, 20)[1], ta.lowest(low, 20)[1]],
+     lookahead = barmerge.lookahead_on)
+
+P  = (dH + dL + dC) / 3
+R1 = 2 * P - dL
+S1 = 2 * P - dH
+R2 = P + (dH - dL)
+S2 = P - (dH - dL)
+
+// ---------- เลือกแนวต้าน/แนวรับที่ใกล้ที่สุด 2 ระดับ ----------
+pick(bool above, array<float> cands) =>
+    arr = array.new_float()
+    for v in cands
+        if not na(v) and (above ? v > dC * 1.0005 : v < dC * 0.9995)
+            arr.push(v)
+    arr.sort(above ? order.ascending : order.descending)
+    out = array.new_float()
+    for v in arr
+        if out.size() > 0 and math.abs(v - out.last()) < mergeK * atr
+            continue
+        out.push(v)
+    [out.size() > 0 ? out.get(0) : na, out.size() > 1 ? out.get(1) : na]
+
+cands = array.from(P, R1, R2, S1, S2, h5, l5, h20, l20)
+[res1, res2] = pick(true, cands)
+[sup1, sup2] = pick(false, cands)
+
+hw  = halfZone * atr
+pad = stopPad * atr
+
+buyLo   = sup1 - hw
+buyHi   = sup1 + hw
+buySL   = sup1 - hw - pad
+buyTP1  = res1 - hw
+buyTP2  = na(res2) ? res1 + 0.5 * atr : res2 - hw
+sellLo  = res1 - hw
+sellHi  = res1 + hw
+sellSL  = res1 + hw + pad
+sellTP1 = sup1 + hw
+sellTP2 = na(sup2) ? sup1 - 0.5 * atr : sup2 + hw
+
+// ---------- วาดบนกราฟ (เฉพาะวันปัจจุบัน) ----------
+RED   = #F0565A
+GREEN = #2FBF71
+GOLD  = #E8B54A
+GREY  = #8C96A8
+
+var array<box>   boxes  = array.new<box>()
+var array<line>  lines  = array.new<line>()
+var array<label> labels = array.new<label>()
+
+fmt(float v) => str.tostring(v, format.mintick)
+
+addZone(float lo, float hi, color col, string name, int t0, int tx) =>
+    if not na(lo) and not na(hi)
+        boxes.push(box.new(t0, hi, time, lo, xloc = xloc.bar_time, extend = extend.right,
+             bgcolor = color.new(col, 82), border_color = color.new(col, 30)))
+        if showLbl
+            labels.push(label.new(tx, (lo + hi) / 2, name + "  " + fmt(lo) + " – " + fmt(hi),
+                 xloc = xloc.bar_time, style = label.style_label_left, color = color.new(col, 20),
+                 textcolor = color.white, size = size.small))
+
+addLine(float y, color col, string st, string name, int t0, int tx) =>
+    if not na(y)
+        lines.push(line.new(t0, y, time, y, xloc = xloc.bar_time, extend = extend.right,
+             color = col, style = st, width = 1))
+        if showLbl
+            labels.push(label.new(tx, y, name + " " + fmt(y), xloc = xloc.bar_time,
+                 style = label.style_label_left, color = color.new(color.black, 100),
+                 textcolor = col, size = size.small))
+
+if barstate.islast
+    for b in boxes
+        b.delete()
+    for l in lines
+        l.delete()
+    for t in labels
+        t.delete()
+    boxes.clear()
+    lines.clear()
+    labels.clear()
+
+    t0 = time("D")
+    tx = time + 3 * timeframe.in_seconds(timeframe.period) * 1000
+
+    addZone(res2 - hw, res2 + hw, RED, "R2", t0, tx)
+    addZone(res1 - hw, res1 + hw, RED, "R1 / โซน Sell", t0, tx)
+    addZone(sup1 - hw, sup1 + hw, GREEN, "S1 / โซน Buy", t0, tx)
+    addZone(sup2 - hw, sup2 + hw, GREEN, "S2", t0, tx)
+    if showPiv
+        addLine(P, GREY, line.style_dashed, "Pivot", t0, tx)
+    if showPlan
+        addLine(buySL, RED, line.style_dotted, "Buy SL", t0, tx)
+        addLine(buyTP1, GREEN, line.style_dotted, "Buy TP1", t0, tx)
+        addLine(buyTP2, GREEN, line.style_dotted, "Buy TP2", t0, tx)
+        addLine(sellSL, RED, line.style_dotted, "Sell SL", t0, tx)
+        addLine(sellTP1, GOLD, line.style_dotted, "Sell TP1", t0, tx)
+        addLine(sellTP2, GOLD, line.style_dotted, "Sell TP2", t0, tx)
+
+// ---------- แจ้งเตือน (ตั้งใน TradingView: Alert > Condition > Amon Levels) ----------
+alertcondition(low <= buyHi and high >= buyLo, "ราคาเข้าโซน Buy", "{{ticker}} เข้าโซน Buy (S1) ราคา {{close}} – รอแท่งยืนยันก่อนเข้า")
+alertcondition(high >= sellLo and low <= sellHi, "ราคาเข้าโซน Sell", "{{ticker}} เข้าโซน Sell (R1) ราคา {{close}} – รอแท่งยืนยันก่อนเข้า")
+alertcondition(close < buySL, "หลุด SL ฝั่ง Buy", "{{ticker}} หลุดระดับ SL ฝั่ง Buy ราคา {{close}}")
+alertcondition(close > sellSL, "ทะลุ SL ฝั่ง Sell", "{{ticker}} ทะลุระดับ SL ฝั่ง Sell ราคา {{close}}")
