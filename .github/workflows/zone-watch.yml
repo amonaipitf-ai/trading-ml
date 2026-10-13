@@ -1,0 +1,39 @@
+name: Zone watch
+
+on:
+  schedule:
+    # เวลาไทย จันทร์–ศุกร์: ทุก 30 นาที 08:00–13:59 (เอเชีย) และทุก 15 นาที 14:00–03:59 (ลอนดอน+นิวยอร์ก)
+    - cron: "*/30 1-6 * * 1-5"
+    - cron: "*/15 7-20 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: zone-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: เช็กราคาเทียบโซน
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+        run: python3 zone_watch.py
+
+      - name: จำว่าแจ้งเตือนไปแล้ว
+        if: always()
+        run: |
+          git config user.name "forecast-bot"
+          git config user.email "forecast-bot@users.noreply.github.com"
+          git add data/watch_state.json 2>/dev/null || true
+          git diff --cached --quiet && exit 0
+          git commit -m "watch $(date -u +%Y-%m-%dT%H:%M)"
+          git pull --rebase -q && git push -q

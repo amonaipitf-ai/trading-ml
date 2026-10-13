@@ -23,6 +23,8 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
+import plan_track
+
 OUT = "output"
 TH = timezone(timedelta(hours=7))
 MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
@@ -221,6 +223,7 @@ def bubble(row, cal):
     if "buy" in pl:
         body += [plan_box("แผน Buy (ฝั่งซื้อ)", pl["buy"], dec, True),
                  plan_box("แผน Sell (ฝั่งขาย)", pl["sell"], dec, False)]
+    body += track_box(row["asset"], m["accent"])
 
     return {
         "type": "bubble", "size": "mega",
@@ -244,8 +247,40 @@ def bubble(row, cal):
     }
 
 
+def track_box(asset, accent):
+    """ผลแผนรอบก่อน + สถิติสะสม"""
+    last, last_date, (n, wins, total_r) = plan_track.summary(asset)
+    items = [txt("ผลแผนรอบก่อน" + (f" (แท่ง {last_date})" if last_date else ""),
+                 color=accent, weight="bold", margin="md")]
+    if last:
+        parts = []
+        for side, name in (("buy", "Buy"), ("sell", "Sell")):
+            if side in last:
+                oc, r = last[side]
+                parts.append(f"{name}: {plan_track.LABEL.get(oc, oc)}" + (f" ({r:+.1f}R)" if oc in ("TP1", "TP2", "SL") else ""))
+        items.append(txt(" · ".join(parts), size="xs"))
+    else:
+        items.append(txt("ยังไม่มีผล (เริ่มเก็บตั้งแต่วันนี้)", size="xs", color=MUTED))
+    if n:
+        items.append(txt(f"สถิติ {n} แผนล่าสุดที่จบแล้ว: ชนะ {wins}/{n} ({wins / n:.0%}) · รวม {total_r:+.1f}R",
+                         size="xs", color=MUTED))
+    return items
+
+
 def build_messages():
     levels = pd.read_csv(os.path.join(OUT, "levels.csv"))
+    # บันทึกแผนวันนี้ + วัดผลแผนรอบก่อน (ก่อนสร้างการ์ด เพื่อให้การ์ดแสดงผลล่าสุด)
+    new_plans = {}
+    for _, r in levels.iterrows():
+        if r["asset"] in META:
+            pl = plan(r)
+            if pl:
+                new_plans[r["asset"]] = {"bar_date": r["bar_date"], "dec": META[r["asset"]]["dec"],
+                                         **{k: {kk: round(float(vv), 4) for kk, vv in v.items()} for k, v in pl.items()}}
+    try:
+        plan_track.update(new_plans)
+    except Exception as e:
+        print(f"::warning::บันทึกแผน/วัดผลไม่สำเร็จ ({type(e).__name__}: {e})")
     cal = load_calendar()
     today = thai_date(datetime.now(TH))
     # แยกเป็น 3 ข้อความ ตัวละ 1 หน้า (XAUUSD, USOIL, DXY)
