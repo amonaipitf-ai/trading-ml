@@ -9,6 +9,16 @@
 3. บันทึกการพยากรณ์ทุกครั้งลง `data/forecast_log.csv`
 4. ตรวจผลจริงของการพยากรณ์ที่ครบกำหนดแล้ว และบันทึกลง `output/track_record_summary.csv`
 
+## สรุปตลาดเข้า LINE ทุกเช้า 05:00 น.
+Workflow **LINE morning brief** (`.github/workflows/line-brief.yml`) รัน `levels.py` แล้ว `line_brief.py`
+ส่งการ์ดสรุป XAUUSD · USOIL · DXY (แนวรับ–แนวต้าน, แผน Buy/Sell, SL/TP, R:R) ผ่าน LINE Messaging API
+
+ต้องตั้ง Secrets ใน **Settings › Secrets and variables › Actions**
+- `LINE_CHANNEL_ACCESS_TOKEN` — token ของ LINE Official Account (จำเป็น)
+- `LINE_TO` — User ID ผู้รับ (ไม่บังคับ; ถ้าไม่ใส่จะ broadcast ถึงทุกคนที่เพิ่มเพื่อน OA)
+
+ทดสอบ: แท็บ **Actions › LINE morning brief › Run workflow**
+
 ## ไฟล์สำคัญ
 | ไฟล์ | คืออะไร |
 |---|---|

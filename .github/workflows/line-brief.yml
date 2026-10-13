@@ -1,0 +1,38 @@
+name: LINE morning brief
+
+on:
+  schedule:
+    # 21:55 UTC = 04:55 น. เวลาไทย ทุกวัน (GitHub มักดีเลย์ไม่กี่นาที ข้อความจึงถึงราว 05:00)
+    - cron: "55 21 * * *"
+  workflow_dispatch: {}  # กดส่งทดสอบเองได้จากแท็บ Actions
+
+permissions:
+  contents: read
+
+concurrency:
+  group: line-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: แนวรับ-แนวต้านล่าสุด
+        run: python levels.py
+
+      - name: ส่งสรุปเข้า LINE
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+        run: python line_brief.py
