@@ -267,6 +267,8 @@ def main():
         except Exception as e:
             print(f"  วาดกราฟ {asset} ไม่สำเร็จ: {e}")
         rows.append(row)
+        print(f"::notice::{asset} ปิด {row['close']} (แท่ง {row['bar_date']}) แหล่ง {src}"
+              + (f" | ลองแล้วไม่ได้: {row['source_notes']}" if row['source_notes'] else ""))
         print(f"{asset:<7} ปิด {row['close']} | แนวต้าน {row['resistance_1']}, {row['resistance_2']} "
               f"| แนวรับ {row['support_1']}, {row['support_2']} | ATR {row['atr14']} ({src})")
     out = pd.DataFrame(rows)
