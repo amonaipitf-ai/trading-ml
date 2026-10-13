@@ -1,0 +1,46 @@
+name: Daily forecast
+
+on:
+  schedule:
+    # 22:15 UTC จันทร์–ศุกร์ = 05:15 น. เวลาไทย อังคาร–เสาร์ (หลังตลาดสหรัฐปิด)
+    - cron: "15 22 * * 1-5"
+  workflow_dispatch: {}  # กดรันเองได้จากแท็บ Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Forecast 5 วันทำการ (ดาวน์โหลดราคาใหม่)
+        run: python forecast.py --horizon 5
+
+      - name: Forecast วันถัดไป (ใช้ราคาที่เพิ่งดาวน์โหลด)
+        run: python forecast.py --horizon 1 --csv data/prices.csv
+
+      - name: ตรวจผลพยากรณ์ที่ครบกำหนด
+        run: python track_record.py
+
+      - name: Commit results
+        run: |
+          git config user.name "forecast-bot"
+          git config user.email "forecast-bot@users.noreply.github.com"
+          git add data output
+          git diff --cached --quiet || git commit -m "forecast $(date -u +%Y-%m-%d)"
+          git push
