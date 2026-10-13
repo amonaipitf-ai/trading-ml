@@ -1,6 +1,6 @@
 # trading-ml — AI พยากรณ์แนวโน้ม XAUUSD · USOIL · DXY
 
-ระบบนี้รันอัตโนมัติบน GitHub Actions ทุกวันทำการ เวลา 05:15 น. (ตามเวลาไทย)
+ระบบนี้รันอัตโนมัติบน GitHub Actions ทุกวันทำการ เวลา 04:20 น. (ตามเวลาไทย)
 
 1. ดาวน์โหลดราคาย้อนหลังจาก Yahoo Finance ตั้งแต่ปี 2008 แล้วบันทึกลง `data/prices.csv`
    - **XAUUSD** ใช้ทองคำฟิวเจอร์ส GC=F แทน, **USOIL** ใช้น้ำมัน WTI ฟิวเจอร์ส CL=F แทน, **DXY** ใช้ DX-Y.NYB
@@ -15,6 +15,7 @@
 | `output/forecast_report_h5.html`, `_h1.html` | รายงานหน้าเดียว ดาวน์โหลดแล้วเปิดใน browser |
 | `output/forecast_latest_h5.csv`, `_h1.csv` | พยากรณ์ล่าสุด |
 | `output/backtest_results_h*.csv` | ผลทดสอบย้อนหลัง |
+| `output/levels.csv`, `levels.md` | แนวรับ-แนวต้านรายวัน (Pivot, จุดสูง/ต่ำ 5 และ 20 วัน, ATR) |
 | `output/track_record_summary.csv` | **ผลจริง** ของการพยากรณ์ที่ผ่านมา (ตัวชี้วัดที่เชื่อถือได้ที่สุด) |
 | `data/forecast_log.csv` | ประวัติการพยากรณ์ทั้งหมด |
 

@@ -2,8 +2,8 @@ name: Daily forecast
 
 on:
   schedule:
-    # 22:15 UTC จันทร์–ศุกร์ = 05:15 น. เวลาไทย อังคาร–เสาร์ (หลังตลาดสหรัฐปิด)
-    - cron: "15 22 * * 1-5"
+    # 21:20 UTC จันทร์–ศุกร์ = 04:20 น. เวลาไทย อังคาร–เสาร์ (หลังแท่งรายวันปิด, ก่อนอีเมล 06:00)
+    - cron: "20 21 * * 1-5"
   workflow_dispatch: {}  # กดรันเองได้จากแท็บ Actions
 
 permissions:
@@ -27,6 +27,10 @@ jobs:
 
       - name: Install
         run: pip install -r requirements.txt
+
+      - name: แนวรับ-แนวต้านรายวัน
+        continue-on-error: true
+        run: python levels.py
 
       - name: Forecast 5 วันทำการ (ดาวน์โหลดราคาใหม่)
         run: python forecast.py --horizon 5
