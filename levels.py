@@ -25,8 +25,9 @@ OUT = "output"
 SOURCES = {
     # spot ก่อน (Twelve Data ต้องมี Secret TWELVEDATA_API_KEY), ไม่ได้ค่อยใช้ฟิวเจอร์ส
     "XAUUSD": [("twelvedata", "XAU/USD"), ("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],
-    "USOIL": [("yahoo", "CL=F")],
-    "DXY": [("yahoo", "DX-Y.NYB")],
+    # น้ำมันและ DXY ใช้ Twelve Data ก่อน (ราคาแบบเดียวกับโบรกเกอร์ ตัดแท่งที่ 17:00 นิวยอร์ก) ไม่ได้ค่อยใช้ Yahoo
+    "USOIL": [("twelvedata", "WTI/USD"), ("yahoo", "CL=F")],
+    "DXY": [("twelvedata", "DXY"), ("twelvedata", "USDX"), ("yahoo", "DX-Y.NYB")],
 }
 DECIMALS = {"XAUUSD": 2, "USOIL": 2, "DXY": 3}
 

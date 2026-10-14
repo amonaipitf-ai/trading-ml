@@ -1,8 +1,8 @@
 """
 ดึงแท่งเทียน 15 นาทีล่าสุด (ใช้แค่ไลบรารีมาตรฐานของ Python ให้รันเร็ว)
   XAUUSD -> Twelve Data XAU/USD (spot ตรงกับแผนในการ์ด) ต้องมี TWELVEDATA_API_KEY
-  USOIL  -> Yahoo CL=F
-  DXY    -> Yahoo DX-Y.NYB
+  USOIL  -> Twelve Data WTI/USD (สำรอง: Yahoo CL=F)
+  DXY    -> Twelve Data DXY / USDX (สำรอง: Yahoo DX-Y.NYB)
 คืนค่า list ของ (เวลาเริ่มแท่ง UTC, open, high, low, close) เรียงจากเก่าไปใหม่
 """
 
@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 UA = {"User-Agent": "Mozilla/5.0"}
 YAHOO = {"USOIL": "CL=F", "DXY": "DX-Y.NYB"}
+TD = {"XAUUSD": ["XAU/USD"], "USOIL": ["WTI/USD"], "DXY": ["DXY", "USDX"]}
 
 
 def _get(url: str):
@@ -53,9 +54,16 @@ def _yahoo(symbol: str):
 
 def bars_15m(asset: str, since: datetime):
     """แท่ง 15 นาทีที่เริ่มตั้งแต่ since เป็นต้นไป; ดึงไม่ได้คืน [] พร้อมคำเตือน"""
-    try:
-        bars = _twelvedata("XAU/USD") if asset == "XAUUSD" else _yahoo(YAHOO[asset])
-    except Exception as e:
-        print(f"::warning::ดึงราคา 15 นาทีของ {asset} ไม่ได้ ({type(e).__name__}: {str(e)[:80]})")
-        return []
-    return sorted(b for b in bars if b[0] >= since)
+    errors = []
+    for sym in TD.get(asset, []):
+        try:
+            return sorted(b for b in _twelvedata(sym) if b[0] >= since)
+        except Exception as e:
+            errors.append(f"twelvedata:{sym} {type(e).__name__}: {str(e)[:60]}")
+    if asset in YAHOO:
+        try:
+            return sorted(b for b in _yahoo(YAHOO[asset]) if b[0] >= since)
+        except Exception as e:
+            errors.append(f"yahoo:{YAHOO[asset]} {type(e).__name__}")
+    print(f"::warning::ดึงราคา 15 นาทีของ {asset} ไม่ได้ ({'; '.join(errors)})")
+    return []
