@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+bot/bot_config.ini
+bot/bot_state.json*
+bot/*.log
+bot/STOP

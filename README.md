@@ -32,6 +32,10 @@ Workflow **LINE morning brief** (`.github/workflows/line-brief.yml`) รัน `
 - ใช้ราคาโบรกเกอร์จริง: ใน MT5 กด Ctrl+U › Bars › เลือก H1 › Export แล้ววางไฟล์ไว้ที่ `data/mt5/XAUUSD_H1.csv` (และ `USOIL_H1.csv`)
   ระบบจะใช้ไฟล์นี้แทน Yahoo อัตโนมัติ (เวลาเซิร์ฟเวอร์ตั้งต้น GMT+3 ปรับด้วย `--tz`)
 
+## บอทเทรดอัตโนมัติ (ทดลองบัญชี Demo)
+โฟลเดอร์ `bot/`: บอท Python สำหรับ MT5 ตามกติกา breakout55 ฝั่ง Buy ของทองคำ (ผลดีที่สุดจาก `backtest_v2.py`)
+รันบน Windows VPS ทุกชั่วโมง ดูคู่มือติดตั้งที่ `bot/README.md` · ไม่ยอมเทรดบัญชีจริงจนกว่าจะตั้ง `allow_real = true`
+
 ## ไฟล์สำคัญ
 | ไฟล์ | คืออะไร |
 |---|---|
