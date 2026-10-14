@@ -78,8 +78,10 @@ def simulate(df: pd.DataFrame, i: int, o: dict, cost: float):
     sgn = 1 if buy else -1
     n = len(df)
     for j in range(i + 1, min(i + 1 + o.get("valid", 1), n)):
-        e = o["entry"]
-        if o["kind"] == "limit":
+        e = o.get("entry")
+        if o["kind"] == "market":       # เข้าที่ราคาเปิดวันถัดไป
+            filled, fill = True, O[j]
+        elif o["kind"] == "limit":
             filled = L[j] <= e if buy else H[j] >= e
             fill = min(O[j], e) if buy else max(O[j], e)
         else:  # stop
@@ -89,7 +91,7 @@ def simulate(df: pd.DataFrame, i: int, o: dict, cost: float):
             break
     else:
         return None, i
-    sl = o["sl"]
+    sl = o["sl"] if "sl" in o else fill - sgn * o["sl_dist"]
     risk = (fill - sl) * sgn
     if risk <= 0:
         return None, i
@@ -123,6 +125,8 @@ def simulate(df: pd.DataFrame, i: int, o: dict, cost: float):
         if o.get("trail"):
             t = df[f"lo{o['trail']}"].values[k] if buy else df[f"hi{o['trail']}"].values[k]
             sl = max(sl, t) if buy else min(sl, t)
+        if o.get("exit_when") and o["exit_when"](k):   # ออกตามสัญญาณ ที่ราคาปิด
+            return done(k, C[k], "SIGNAL")
     return done(last, C[last], "TIME")
 
 
