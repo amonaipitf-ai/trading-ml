@@ -56,8 +56,16 @@ def load_config():
         sys.exit("ไม่พบ bot_config.ini — คัดลอกจาก bot_config.example.ini แล้วแก้ค่า")
     cfg.read(path, encoding="utf-8")
     b = cfg["bot"]
+    # symbols = XAUUSDm:active, USOILm:shadow  (active = เทรดตามโหมด dry_run, shadow = บันทึกสัญญาณอย่างเดียว)
+    raw = b.get("symbols", "").strip() or b.get("symbol", "XAUUSDm").strip() + ":active"
+    symbols = []
+    for item in raw.split(","):
+        name, _, mode = item.strip().partition(":")
+        mode = (mode or "active").strip().lower()
+        if name and mode in ("active", "shadow", "off"):
+            symbols.append((name.strip(), mode))
     return {
-        "symbol": b.get("symbol", "XAUUSDm").strip(),
+        "symbols": [x for x in symbols if x[1] != "off"],
         "risk_pct": b.getfloat("risk_pct", 0.5),
         "max_lot": b.getfloat("max_lot", 1.0),
         "dry_run": b.getboolean("dry_run", True),
@@ -84,9 +92,16 @@ def save_state(state):
 
 
 # ---------------------------------------------------------------- LINE (เงียบ, ไม่ส่ง 23:00–05:00)
+OUTBOX = []
+
+
 def notify(cfg, state, text):
-    log.info("LINE: %s", text.replace("\n", " | "))
-    state.setdefault("outbox", []).append(f"{datetime.now(TH):%d/%m %H:%M} {text}")
+    tag = cfg.get("symbol", "")
+    if cfg.get("mode") == "shadow":
+        tag += " เงา"
+    line = f"{datetime.now(TH):%d/%m %H:%M} [{tag}] {text}" if tag else f"{datetime.now(TH):%d/%m %H:%M} {text}"
+    log.info("LINE: %s", line.replace("\n", " | "))
+    OUTBOX.append(line)
 
 
 def flush_outbox(cfg, state):
@@ -98,7 +113,7 @@ def flush_outbox(cfg, state):
     hour = datetime.now(TH).hour
     if hour >= 23 or hour < 5:
         return                             # ช่วงนอน: เก็บไว้ส่งรอบถัดไป
-    text = "🤖 บอททอง (Demo)\n" + "\n".join(box)
+    text = "🤖 บอทเทรด (Demo)\n" + "\n".join(box)
     payload = {"messages": [{"type": "text", "text": text[:4900]}], "notificationDisabled": True}
     url = "https://api.line.me/v2/bot/message/broadcast"
     if cfg["line_to"]:
@@ -153,25 +168,26 @@ def lot_size(equity, risk_pct, entry, sl, info, max_lot):
 
 
 # ---------------------------------------------------------------- MT5
+def connect(m, cfg):
+    ok = m.initialize(path=cfg["terminal_path"]) if cfg["terminal_path"] else m.initialize()
+    if not ok:
+        raise RuntimeError(f"เชื่อม MT5 ไม่ได้: {m.last_error()} (เปิดโปรแกรม MT5 และล็อกอินไว้หรือยัง?)")
+    acc = m.account_info()
+    if acc is None:
+        raise RuntimeError("MT5 ยังไม่ได้ล็อกอินบัญชี")
+    if acc.trade_mode != m.ACCOUNT_TRADE_MODE_DEMO and not cfg["allow_real"]:
+        raise RuntimeError(f"บัญชี {acc.login} ไม่ใช่ Demo — บอทหยุดทำงาน (ตั้ง allow_real = true ถ้าตั้งใจ)")
+    return acc
+
+
 class Broker:
     """ห่อ MetaTrader5 ไว้ที่เดียว (ทดสอบได้ด้วย module ปลอม)"""
 
     def __init__(self, mt5, cfg):
         self.mt5, self.cfg, self.sym = mt5, cfg, cfg["symbol"]
-
-    def connect(self):
-        m = self.mt5
-        ok = m.initialize(path=self.cfg["terminal_path"]) if self.cfg["terminal_path"] else m.initialize()
-        if not ok:
-            raise RuntimeError(f"เชื่อม MT5 ไม่ได้: {m.last_error()} (เปิดโปรแกรม MT5 และล็อกอินไว้หรือยัง?)")
-        acc = m.account_info()
-        if acc is None:
-            raise RuntimeError("MT5 ยังไม่ได้ล็อกอินบัญชี")
-        if acc.trade_mode != m.ACCOUNT_TRADE_MODE_DEMO and not self.cfg["allow_real"]:
-            raise RuntimeError(f"บัญชี {acc.login} ไม่ใช่ Demo — บอทหยุดทำงาน (ตั้ง allow_real = true ถ้าตั้งใจ)")
-        if not m.symbol_select(self.sym, True):
+        if not mt5.symbol_select(self.sym, True):
             raise RuntimeError(f"ไม่พบสัญลักษณ์ {self.sym} ใน MT5 — ตรวจชื่อใน bot_config.ini")
-        return acc
+
 
     def closed_d1(self, n=260):
         rates = self.mt5.copy_rates_from_pos(self.sym, self.mt5.TIMEFRAME_D1, 1, n)  # pos 1 = ข้ามแท่งที่ยังไม่ปิด
@@ -220,16 +236,30 @@ class Broker:
 # ---------------------------------------------------------------- ตรรกะหลัก
 def run(mt5, cfg):
     state = load_state()
-    br = Broker(mt5, cfg)
+    OUTBOX.clear()
+    if "last_bar" in state and "symbols" not in state:          # ย้าย state รุ่นเก่า (สัญลักษณ์เดียว)
+        old = {k: state.pop(k) for k in list(state) if k not in ("outbox", "last_error")}
+        state["symbols"] = {cfg["symbols"][0][0]: old} if cfg["symbols"] else {}
     try:
-        acc = br.connect()
-        _run(br, cfg, state, acc)
+        acc = connect(mt5, cfg)
+        state.pop("last_error", None)
+        for sym, mode in cfg["symbols"]:
+            sc = {**cfg, "symbol": sym, "mode": mode, "dry_run": cfg["dry_run"] or mode == "shadow"}
+            st = state.setdefault("symbols", {}).setdefault(sym, {})
+            try:
+                _run(Broker(mt5, sc), sc, st, acc)
+            except Exception as e:                                # ปัญหาของตัวหนึ่ง ไม่หยุดตัวอื่น
+                log.exception("%s มีข้อผิดพลาด", sym)
+                if st.get("last_error") != str(e):
+                    notify(sc, st, f"⚠️ มีปัญหา: {e}")
+                st["last_error"] = str(e)
     except Exception as e:
         log.exception("บอทหยุดด้วยข้อผิดพลาด")
         if state.get("last_error") != str(e):
             notify(cfg, state, f"⚠️ บอทมีปัญหา: {e}")
         state["last_error"] = str(e)
     finally:
+        state.setdefault("outbox", []).extend(OUTBOX)
         flush_outbox(cfg, state)
         save_state(state)
         mt5.shutdown()
@@ -350,7 +380,7 @@ def main():
         handlers=[logging.FileHandler(os.path.join(HERE, "bot.log"), encoding="utf-8"), logging.StreamHandler()])
     cfg = load_config()
     import MetaTrader5 as mt5
-    log.info("เริ่มรอบ (symbol=%s, risk=%.2f%%, dry_run=%s)", cfg["symbol"], cfg["risk_pct"], cfg["dry_run"])
+    log.info("เริ่มรอบ (symbols=%s, risk=%.2f%%, dry_run=%s)", cfg["symbols"], cfg["risk_pct"], cfg["dry_run"])
     run(mt5, cfg)
 
 

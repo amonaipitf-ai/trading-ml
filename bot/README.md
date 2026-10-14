@@ -1,4 +1,8 @@
-# บอท Breakout ทองคำ — คู่มือติดตั้งบน Windows VPS (ทำจากมือถือได้)
+# บอท Breakout ทองคำ (+ น้ำมันโหมดเงา) — คู่มือติดตั้งบน Windows VPS (ทำจากมือถือได้)
+
+ตั้งค่าหลายสัญลักษณ์ได้ใน `bot_config.ini` บรรทัด `symbols = XAUUSDm:active, USOILm:shadow`
+- `active` = เทรด (ยังขึ้นกับ `dry_run`) · `shadow` = บันทึกสัญญาณอย่างเดียว ไม่ส่งออร์เดอร์ · `off` = ปิด
+- น้ำมันตั้งเป็น `shadow` เพราะยังไม่มีกติกาไหนผ่าน backtest (ดู `output/backtest_oil.md`)
 
 บอทนี้ใช้กติกา **breakout55 ฝั่ง Buy** ที่ดีที่สุดจาก `backtest_v2.py`
 - ทองเป็นขาขึ้น (ราคาปิด > MA200 และ MA50 > MA200) → วาง Buy Stop ที่จุดสูงสุด 55 วัน
@@ -43,7 +47,7 @@
    › ปุ่ม **Code** › **Download ZIP** › แตกไฟล์
 2. คัดลอกโฟลเดอร์ `bot` ไปไว้ที่ `C:\goldbot`
 3. ใน `C:\goldbot` คัดลอก `bot_config.example.ini` เป็น `bot_config.ini` แล้วเปิดด้วย Notepad แก้
-   - `symbol =` ชื่อทองจากขั้นที่ 4
+   - `symbols =` ชื่อทอง/น้ำมันจากขั้นที่ 4 (เช่น `XAUUSDm:active, USOILm:shadow`)
    - `channel_access_token =` token LINE ตัวเดียวกับที่ใช้ใน GitHub (ถ้าต้องการแจ้งเตือน)
    - ปล่อย `dry_run = true` ไว้ก่อน
 
