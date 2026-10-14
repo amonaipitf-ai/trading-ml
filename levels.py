@@ -208,8 +208,10 @@ def compute(asset: str, df: pd.DataFrame) -> dict:
         "ต่ำสุด 20 วัน": float(df["Low"].tail(20).min()),
     }
     candidates = {**{f"Pivot {k}": v for k, v in piv.items()}, **swing}
-    above = sorted([(v, k) for k, v in candidates.items() if v > C * 1.0005])
-    below = sorted([(v, k) for k, v in candidates.items() if v < C * 0.9995], reverse=True)
+    # แนวรับ/ต้านต้องห่างจากราคาปิดอย่างน้อย 0.2 ATR ไม่งั้นโซน Buy กับ Sell จะชนกัน
+    gap = 0.2 * atr
+    above = sorted([(v, k) for k, v in candidates.items() if v > C + gap])
+    below = sorted([(v, k) for k, v in candidates.items() if v < C - gap], reverse=True)
 
     def fmt(pairs, n):
         # รวมระดับที่ใกล้กันมาก (ห่างกันไม่ถึง 0.15 ATR) ให้เป็นโซนเดียว

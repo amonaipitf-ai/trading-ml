@@ -36,7 +36,7 @@ S2 = P - (dH - dL)
 pick(bool above, array<float> cands) =>
     arr = array.new_float()
     for v in cands
-        if not na(v) and (above ? v > dC * 1.0005 : v < dC * 0.9995)
+        if not na(v) and (above ? v > dC + 0.2 * atr : v < dC - 0.2 * atr)
             arr.push(v)
     arr.sort(above ? order.ascending : order.descending)
     out = array.new_float()
@@ -57,12 +57,12 @@ buyLo   = sup1 - hw
 buyHi   = sup1 + hw
 buySL   = sup1 - hw - pad
 buyTP1  = res1 - hw
-buyTP2  = na(res2) ? res1 + 0.5 * atr : res2 - hw
+buyTP2  = na(res2) or res2 - res1 > 1.5 * atr ? res1 + 0.5 * atr : res2 - hw
 sellLo  = res1 - hw
 sellHi  = res1 + hw
 sellSL  = res1 + hw + pad
 sellTP1 = sup1 + hw
-sellTP2 = na(sup2) ? sup1 - 0.5 * atr : sup2 + hw
+sellTP2 = na(sup2) or sup1 - sup2 > 1.5 * atr ? sup1 - 0.5 * atr : sup2 + hw
 
 // ---------- วาดบนกราฟ (เฉพาะวันปัจจุบัน) ----------
 RED   = #F0565A

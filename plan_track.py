@@ -76,7 +76,9 @@ def update(new_plans: dict):
     for asset, plan in new_plans.items():
         prev = old.get(asset)
         if prev and prev.get("bar_date") == plan["bar_date"]:
-            out[asset] = prev
+            same = all(prev.get(s) == plan.get(s) for s in ("buy", "sell"))
+            # แท่งเดิมและแผนเดิม -> เก็บไว้; แท่งเดิมแต่แผนถูกคำนวณใหม่ -> แทนที่ (ไม่นับผลแผนเก่า)
+            out[asset] = prev if same else {**plan, "created_utc": now.isoformat(timespec="seconds")}
             continue
         if prev:
             created = datetime.fromisoformat(prev["created_utc"])

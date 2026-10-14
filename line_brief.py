@@ -60,11 +60,14 @@ def plan(row) -> dict:
     out = {}
     if pd.notna(s1) and pd.notna(r1):
         entry = float(s1)
-        tp2 = float(r2) - hw if pd.notna(r2) else float(r1) + atr * 0.5
+        # TP2 = แนวต้าน 2 แต่ไม่ไกลเกิน 1.5 ATR จาก TP1 (ไม่งั้นใช้ TP1 + 0.5 ATR)
+        far = pd.isna(r2) or float(r2) - float(r1) > 1.5 * atr
+        tp2 = float(r1) + atr * 0.5 if far else float(r2) - hw
         out["buy"] = {"lo": entry - hw, "hi": entry + hw, "sl": entry - hw - pad,
                       "tp1": float(r1) - hw, "tp2": tp2}
         entry = float(r1)
-        tp2 = float(s2) + hw if pd.notna(s2) else float(s1) - atr * 0.5
+        far = pd.isna(s2) or float(s1) - float(s2) > 1.5 * atr
+        tp2 = float(s1) - atr * 0.5 if far else float(s2) + hw
         out["sell"] = {"lo": entry - hw, "hi": entry + hw, "sl": entry + hw + pad,
                        "tp1": float(s1) + hw, "tp2": tp2}
     for side, p in out.items():
