@@ -24,6 +24,14 @@ Workflow **LINE morning brief** (`.github/workflows/line-brief.yml`) รัน `
 - `zone_watch.py` (workflow **Zone watch**) เช็กราคา 15 นาที ทุก 15–30 นาที วันจันทร์–ศุกร์ 08:00–22:59 น. ส่ง LINE ครั้งเดียวเมื่อราคาแตะโซน Buy/Sell ของแผนวันนั้น (ไม่แจ้งช่วง 23:00–05:00 น.; ทุกข้อความไม่มีเสียงเตือน)
 - `plan_track.py` บันทึกแผนวันนี้ใน `data/plan_today.json` และวัดผลแผนรอบก่อน (ถึง TP1/TP2, โดน SL, ไม่เข้าโซน) ลง `data/plan_results.csv` การ์ดตอนเช้าแสดงผลรอบก่อนและสถิติสะสม
 
+## จำลองบอทเทรดอัตโนมัติ (Backtest)
+`backtest_zones.py` (workflow **Backtest zones**) เล่นแผนโซน Buy/Sell แบบเดียวกับการ์ด LINE ย้อนหลังทุกวันด้วยแท่ง 1 ชม.
+เหมือนบอทที่วาง Limit order ไว้ทั้งสองฝั่ง: ปิดครึ่งที่ TP1 + เลื่อน SL เป็นทุน, ปิดทุกออเดอร์สิ้นวัน, หัก spread แล้ว
+เทียบตัวกรอง 4 แบบ (all / trend / rr / trend+rr) และแยกผลช่วง 30% ท้าย (out-of-sample)
+- ผล: `output/backtest_zones.md`, `output/backtest_zones_summary.csv`, `output/backtest_zones_trades.csv`, `output/charts/backtest_equity.png`
+- ใช้ราคาโบรกเกอร์จริง: ใน MT5 กด Ctrl+U › Bars › เลือก H1 › Export แล้ววางไฟล์ไว้ที่ `data/mt5/XAUUSD_H1.csv` (และ `USOIL_H1.csv`)
+  ระบบจะใช้ไฟล์นี้แทน Yahoo อัตโนมัติ (เวลาเซิร์ฟเวอร์ตั้งต้น GMT+3 ปรับด้วย `--tz`)
+
 ## ไฟล์สำคัญ
 | ไฟล์ | คืออะไร |
 |---|---|

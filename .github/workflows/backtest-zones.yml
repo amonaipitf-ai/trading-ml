@@ -1,0 +1,49 @@
+name: Backtest zones (จำลองบอท)
+
+# กดรันเองจากแท็บ Actions และรันซ้ำทุกวันเสาร์ 09:00 น. ไทย ให้ผลจำลองอัปเดตตามข้อมูลใหม่
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 2 * * 6"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backtest-zones
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: จำลองบอทเทรดโซน Buy/Sell
+        run: |
+          # ถ้ามีไฟล์ H1 ที่ export จาก MT5 ใน data/mt5/ (เช่น XAUUSD_H1.csv) จะใช้ราคาของโบรกเกอร์แทน Yahoo
+          args=""
+          for a in XAUUSD USOIL DXY; do
+            f=$(ls data/mt5/${a}*H1*.csv 2>/dev/null | head -1)
+            [ -n "$f" ] && args="$args --csv $a=$f"
+          done
+          python backtest_zones.py $args
+          cat output/backtest_zones.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: บันทึกผล
+        run: |
+          git config user.name "forecast-bot"
+          git config user.email "forecast-bot@users.noreply.github.com"
+          git add output/backtest_zones* output/charts/backtest_equity.png
+          git diff --cached --quiet && exit 0
+          git commit -m "backtest zones $(date -u +%Y-%m-%d)"
+          for i in 1 2 3; do git pull --rebase -X theirs && git push && break; sleep 5; done
