@@ -1,0 +1,32 @@
+name: TD symbol check
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check
+        env:
+          K: ${{ secrets.TWELVEDATA_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse
+          k = os.environ["K"]
+          def get(path, **q):
+              q["apikey"] = k
+              try:
+                  r = urllib.request.urlopen("https://api.twelvedata.com/" + path + "?" + urllib.parse.urlencode(q), timeout=30)
+                  return r.status, json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()[:200]
+          import time
+          for s in ["WTI/USD", "XBR/USD", "CL", "DXY", "USDX", "DX"]:
+              st, d = get("quote", symbol=s)
+              msg = d if isinstance(d, str) else {x: d.get(x) for x in ("symbol", "name", "exchange", "type", "close", "code", "message")}
+              print(f"::notice::quote {s} -> {st} {json.dumps(msg)[:220]}")
+              time.sleep(8)
+          for q in ["WTI", "dollar index"]:
+              st, d = get("symbol_search", symbol=q, outputsize=8)
+              rows = d.get("data", []) if isinstance(d, dict) else []
+              print(f"::notice::search {q}: " + " | ".join(f"{r.get('symbol')}/{r.get('instrument_type')}/{r.get('exchange')}" for r in rows)[:400])
+              time.sleep(8)
+          PY

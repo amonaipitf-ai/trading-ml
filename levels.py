@@ -27,7 +27,7 @@ SOURCES = {
     "XAUUSD": [("twelvedata", "XAU/USD"), ("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],
     # น้ำมันและ DXY ใช้ Twelve Data ก่อน (ราคาแบบเดียวกับโบรกเกอร์ ตัดแท่งที่ 17:00 นิวยอร์ก) ไม่ได้ค่อยใช้ Yahoo
     "USOIL": [("twelvedata", "WTI/USD"), ("yahoo", "CL=F")],
-    "DXY": [("twelvedata", "DXY"), ("twelvedata", "USDX"), ("yahoo", "DX-Y.NYB")],
+    "DXY": [("twelvedata", "DXY"), ("yahoo", "DX-Y.NYB")],
 }
 DECIMALS = {"XAUUSD": 2, "USOIL": 2, "DXY": 3}
 
