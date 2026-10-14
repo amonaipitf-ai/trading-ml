@@ -26,8 +26,10 @@ SOURCES = {
     # spot ก่อน (Twelve Data ต้องมี Secret TWELVEDATA_API_KEY), ไม่ได้ค่อยใช้ฟิวเจอร์ส
     "XAUUSD": [("twelvedata", "XAU/USD"), ("stooq", "xauusd"), ("yahoo", "XAUUSD=X"), ("yahoo", "GC=F")],
     # น้ำมันและ DXY ใช้ Twelve Data ก่อน (ราคาแบบเดียวกับโบรกเกอร์ ตัดแท่งที่ 17:00 นิวยอร์ก) ไม่ได้ค่อยใช้ Yahoo
-    "USOIL": [("twelvedata", "WTI/USD"), ("yahoo", "CL=F")],
-    "DXY": [("twelvedata", "DXY"), ("yahoo", "DX-Y.NYB")],
+    # Twelve Data แพ็กเกจฟรีไม่มี WTI/USD และไม่มี DXY -> ใช้ Yahoo
+    # น้ำมันรวมแท่ง 1 ชม. เป็นแท่งวันตัดที่ 17:00 นิวยอร์ก (ราคาปิดแบบโบรกเกอร์ ไม่ใช่ราคา settlement)
+    "USOIL": [("yahoo_h", "CL=F"), ("yahoo", "CL=F")],
+    "DXY": [("yahoo", "DX-Y.NYB")],
 }
 DECIMALS = {"XAUUSD": 2, "USOIL": 2, "DXY": 3}
 
@@ -39,6 +41,20 @@ def from_yahoo(ticker: str) -> pd.DataFrame:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df[["Open", "High", "Low", "Close"]].dropna()
+
+
+def from_yahoo_hourly(ticker: str) -> pd.DataFrame:
+    """Yahoo แท่ง 1 ชม. 60 วัน -> แท่งวันแบบโบรกเกอร์ (ตัด 17:00 นิวยอร์ก) ราคาปิด = ราคาซื้อขายล่าสุดของวัน"""
+    import yfinance as yf
+
+    df = yf.download(ticker, period="60d", interval="60m", auto_adjust=False, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df = df[["Open", "High", "Low", "Close"]].dropna()
+    idx = df.index.tz_convert("America/New_York").tz_localize(None) if df.index.tz is not None else df.index
+    h = pd.DataFrame({"datetime": idx.astype(str), "open": df["Open"].values, "high": df["High"].values,
+                      "low": df["Low"].values, "close": df["Close"].values})
+    return hourly_to_daily(h)
 
 
 def from_stooq(symbol: str) -> pd.DataFrame:
@@ -83,6 +99,8 @@ def hourly_to_daily(h: pd.DataFrame, now_ny=None) -> pd.DataFrame:
 def fetch(kind: str, sym: str) -> pd.DataFrame:
     if kind == "twelvedata":
         return from_twelvedata(sym)
+    if kind == "yahoo_h":
+        return from_yahoo_hourly(sym)
     return from_stooq(sym) if kind == "stooq" else from_yahoo(sym)
 
 

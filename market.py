@@ -1,8 +1,8 @@
 """
 ดึงแท่งเทียน 15 นาทีล่าสุด (ใช้แค่ไลบรารีมาตรฐานของ Python ให้รันเร็ว)
   XAUUSD -> Twelve Data XAU/USD (spot ตรงกับแผนในการ์ด) ต้องมี TWELVEDATA_API_KEY
-  USOIL  -> Twelve Data WTI/USD (สำรอง: Yahoo CL=F)
-  DXY    -> Twelve Data DXY (สำรอง: Yahoo DX-Y.NYB)
+  USOIL  -> Yahoo CL=F   (Twelve Data แพ็กเกจฟรีไม่มี WTI/USD)
+  DXY    -> Yahoo DX-Y.NYB (Twelve Data ไม่มี DXY)
 คืนค่า list ของ (เวลาเริ่มแท่ง UTC, open, high, low, close) เรียงจากเก่าไปใหม่
 """
 
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 UA = {"User-Agent": "Mozilla/5.0"}
 YAHOO = {"USOIL": "CL=F", "DXY": "DX-Y.NYB"}
-TD = {"XAUUSD": ["XAU/USD"], "USOIL": ["WTI/USD"], "DXY": ["DXY"]}
+TD = {"XAUUSD": ["XAU/USD"]}
 
 
 def _get(url: str):
