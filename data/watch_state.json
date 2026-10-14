@@ -1,7 +1,9 @@
 {
  "XAUUSD": {
   "created_utc": "2026-10-13T22:11:32+00:00",
-  "sent": []
+  "sent": [
+   "sell"
+  ]
  },
  "USOIL": {
   "created_utc": "2026-10-13T22:11:32+00:00",
