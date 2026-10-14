@@ -39,11 +39,16 @@ jobs:
           python backtest_zones.py $args
           cat output/backtest_zones.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: ค้นหากติกาใหม่ (แท่งวันตั้งแต่ 2008)
+        run: |
+          python backtest_v2.py
+          cat output/backtest_v2.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: บันทึกผล
         run: |
           git config user.name "forecast-bot"
           git config user.email "forecast-bot@users.noreply.github.com"
-          git add output/backtest_zones* output/charts/backtest_equity.png
+          git add output/backtest_zones* output/backtest_v2* output/charts/backtest_equity.png output/charts/backtest_v2_equity.png
           git diff --cached --quiet && exit 0
           git commit -m "backtest zones $(date -u +%Y-%m-%d)"
           for i in 1 2 3; do git pull --rebase -X theirs && git push && break; sleep 5; done
