@@ -286,8 +286,15 @@ def build_messages():
         print(f"::warning::บันทึกแผน/วัดผลไม่สำเร็จ ({type(e).__name__}: {e})")
     cal = load_calendar()
     today = thai_date(datetime.now(TH))
-    # แยกเป็น 3 ข้อความ ตัวละ 1 หน้า (XAUUSD, USOIL, DXY)
-    return [
+    # ข้อความแรก = สรุปข่าวเช้า 1 หน้า (ถ้าทำไม่ได้ ข้ามไป ไม่ให้การ์ดราคาหาย)
+    news = []
+    try:
+        import news_brief
+        news = [news_brief.message()]
+    except Exception as e:
+        print(f"::warning::สร้างการ์ดข่าวไม่สำเร็จ ({type(e).__name__}: {e})")
+    # ตามด้วย 3 ข้อความ ตัวละ 1 หน้า (XAUUSD, USOIL, DXY)
+    return news + [
         {"type": "flex",
          "altText": f"{r['asset']} {today} · ปิด {r['close']} · S1 {r['support_1']} / R1 {r['resistance_1']}",
          "contents": bubble(r, cal)}

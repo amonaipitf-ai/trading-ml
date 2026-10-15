@@ -1,0 +1,23 @@
+name: News card test (ส่งเฉพาะการ์ดข่าว)
+
+# กดทดสอบจากแท็บ Actions: ส่งเฉพาะการ์ด "ข่าวเช้านี้" เข้า LINE (ไม่แตะแผนเทรด)
+on:
+  workflow_dispatch: {}
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: ส่งการ์ดข่าว
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python news_brief.py
