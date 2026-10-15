@@ -4,7 +4,8 @@
 1. ดึงหัวข่าว 24 ชม. ล่าสุดจาก Google News RSS (ฟรี ไม่ต้องใช้ key)
 2. ถ้ามี Secret ANTHROPIC_API_KEY -> ให้ Claude (Haiku) สรุปเป็นภาษาไทย ตัวละ 2–3 ข้อ
    พร้อมบอกว่าข่าวกดดัน/หนุนราคา (ค่าใช้จ่ายราว 0.001 USD ต่อวัน)
-   ถ้าไม่มี key -> แสดงหัวข่าวภาษาอังกฤษตัวละ 3 ข่าว
+   ถ้าไม่มี key -> แปลหัวข่าวเป็นไทยด้วย MyMemory Translation API (ฟรี ไม่ต้องใช้ key) ตัวละ 3 ข่าว
+   แปลไม่ได้ -> แสดงหัวข่าวภาษาอังกฤษ
 3. คืนค่าเป็น Flex bubble 1 หน้า (line_brief.py ใส่เป็นข้อความแรกของสรุปเช้า)
 
 รันเดี่ยว (ส่งเฉพาะการ์ดข่าว): python news_brief.py
@@ -71,6 +72,21 @@ def collect():
     return news
 
 
+# ---------------------------------------------------------------- แปลหัวข่าว (ฟรี)
+def translate_th(text: str) -> str:
+    """แปลอังกฤษ -> ไทยด้วย MyMemory (ฟรี ~5,000 ตัวอักษร/วัน; ใช้จริงวันละ ~1,000) แปลไม่ได้คืนข้อความเดิม"""
+    try:
+        q = urllib.parse.urlencode({"q": text[:450], "langpair": "en|th"})
+        data = json.loads(urllib.request.urlopen(urllib.request.Request(
+            f"https://api.mymemory.translated.net/get?{q}", headers=UA), timeout=20).read())
+        out = html.unescape(str((data.get("responseData") or {}).get("translatedText") or "")).strip()
+        if data.get("responseStatus") == 200 and out and "MYMEMORY WARNING" not in out.upper():
+            return out
+    except Exception as e:
+        print(f"::warning::แปลข่าวไม่สำเร็จ ({type(e).__name__})")
+    return text
+
+
 # ---------------------------------------------------------------- สรุปด้วย Claude
 PROMPT = """You are a markets news editor writing a morning brief in Thai for a retail trader of
 gold (XAUUSD), WTI oil (USOIL) and the US dollar index (DXY).
@@ -125,15 +141,20 @@ def _txt(text, **kw):
 def bubble(news=None):
     news = news if news is not None else collect()
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    summary, note = None, ""
+    summary, note, translated = None, "", False
     if key and any(news.values()):
         try:
             summary = summarize(news, key)
         except Exception as e:
-            print(f"::warning::สรุปข่าวด้วย Claude ไม่สำเร็จ ({type(e).__name__}) — ใช้หัวข่าวแทน")
-            note = "สรุปอัตโนมัติไม่สำเร็จ แสดงหัวข่าวแทน"
-    elif not key:
-        note = "ใส่ ANTHROPIC_API_KEY ใน GitHub Secrets เพื่อให้สรุปเป็นภาษาไทย"
+            print(f"::warning::สรุปข่าวด้วย Claude ไม่สำเร็จ ({type(e).__name__}) — ใช้หัวข่าวแปลแทน")
+    if not summary:
+        for items in news.values():
+            for n in items[:3]:
+                th = translate_th(n["title"])
+                if th != n["title"]:
+                    n["title"], translated = th, True
+        if not translated and any(news.values()):
+            note = "แปลภาษาไทยไม่สำเร็จวันนี้ แสดงหัวข่าวต้นฉบับ"
 
     body = []
     if summary and summary.get("overall"):
@@ -165,7 +186,8 @@ def bubble(news=None):
             _txt(f"ทองคำ · น้ำมัน · ดอลลาร์ · ข่าว 24 ชม.ล่าสุด ถึง {now:%H:%M} น.", size="xs", color=MUTED)]},
         "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": body},
         "footer": {"type": "box", "layout": "vertical", "contents": [
-            _txt(("สรุปอัตโนมัติด้วย AI จาก" if summary else "หัวข่าวจาก") + " Google News · อาจคลาดเคลื่อน · ไม่ใช่คำแนะนำการลงทุน",
+            _txt(("สรุปอัตโนมัติด้วย AI จาก" if summary else "หัวข่าวแปลอัตโนมัติจาก" if translated else "หัวข่าวจาก")
+                 + " Google News · อาจคลาดเคลื่อน · ไม่ใช่คำแนะนำการลงทุน",
                  size="xxs", color=MUTED)]},
     }
 
