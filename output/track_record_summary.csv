@@ -1,4 +1,4 @@
 asset,horizon_days,n,hit_rate,n_confident,hit_rate_confident,share_up_actual
-DXY,1,1.0,0.0,1.0,0.0,1.0
-Gold,1,1.0,1.0,1.0,1.0,0.0
-Oil,1,1.0,0.0,0.0,,1.0
+DXY,1,2.0,0.5,1.0,0.0,0.5
+Gold,1,2.0,0.5,1.0,1.0,0.5
+Oil,1,2.0,0.5,0.0,,1.0
