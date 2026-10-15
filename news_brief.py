@@ -72,6 +72,31 @@ def collect():
     return news
 
 
+# ---------------------------------------------------------------- ทิศทางจากคำในหัวข่าว (ฟรี ไม่ใช้ AI)
+UP_WORDS = ("rise", "rises", "rising", "rose", "gain", "gains", "jump", "jumps", "climb", "climbs", "rally",
+            "rallies", "surge", "surges", "soar", "soars", "higher", "high", "highs", "record", "advance",
+            "advances", "rebound", "rebounds", "up", "boost", "boosts", "spike", "spikes", "firm", "firms", "strengthen")
+DOWN_WORDS = ("fall", "falls", "falling", "fell", "drop", "drops", "slide", "slides", "slip", "slips", "decline",
+              "declines", "lower", "low", "lows", "plunge", "plunges", "tumble", "tumbles", "sink", "sinks", "slump",
+              "slumps", "retreat", "retreats", "down", "loss", "losses", "ease", "eases", "weaken", "weakens", "dip", "dips")
+
+
+def headline_tone(title: str) -> int:
+    """+1 หัวข่าวบอกว่าราคาขึ้น, -1 ลง, 0 ไม่ชัด — นับคำในหัวข่าวภาษาอังกฤษ"""
+    words = re.findall(r"[a-z]+", title.lower())
+    up = sum(w in UP_WORDS for w in words)
+    dn = sum(w in DOWN_WORDS for w in words)
+    return (up > dn) - (dn > up)
+
+
+def overall_tone(items) -> str:
+    score = sum(n.get("tone", 0) for n in items)
+    votes = sum(abs(n.get("tone", 0)) for n in items)
+    if not votes or abs(score) < max(1, votes / 3):
+        return "mixed"
+    return "up" if score > 0 else "down"
+
+
 # ---------------------------------------------------------------- แปลหัวข่าว (ฟรี)
 def translate_th(text: str) -> str:
     """แปลอังกฤษ -> ไทยด้วย MyMemory (ฟรี ~5,000 ตัวอักษร/วัน; ใช้จริงวันละ ~1,000) แปลไม่ได้คืนข้อความเดิม"""
@@ -149,6 +174,8 @@ def bubble(news=None):
             print(f"::warning::สรุปข่าวด้วย Claude ไม่สำเร็จ ({type(e).__name__}) — ใช้หัวข่าวแปลแทน")
     if not summary:
         for items in news.values():
+            for n in items:
+                n["tone"] = headline_tone(n["title"])   # ก่อนแปล (ใช้คำภาษาอังกฤษ)
             for n in items[:3]:
                 th = translate_th(n["title"])
                 if th != n["title"]:
@@ -162,18 +189,23 @@ def bubble(news=None):
                      "backgroundColor": "#1E2636", "contents": [_txt(summary["overall"], size="xs", weight="bold")]})
     for asset, t in TOPICS.items():
         head = [_txt(t["name"], color=t["accent"], weight="bold", flex=6)]
-        if summary:
-            label, col = TONE[summary[asset]["tone"]]
+        tone = summary[asset]["tone"] if summary else (overall_tone(news[asset]) if news.get(asset) else None)
+        if tone:
+            label, col = TONE[tone]
             head.append(_txt(label, color=col, size="xs", align="end", flex=4))
         body.append({"type": "box", "layout": "horizontal", "margin": "md", "contents": head})
         if summary:
             body += [_txt("• " + p, size="xs") for p in summary[asset]["points"]]
         elif news.get(asset):
             for n in news[asset][:3]:
-                body.append(_txt(f"• {n['title']}", size="xs"))
+                mark, col = {1: ("▲", TONE["up"][1]), -1: ("▼", TONE["down"][1])}.get(n.get("tone", 0), ("•", TEXT))
+                body.append({"type": "box", "layout": "horizontal", "contents": [
+                    _txt(mark, size="xs", color=col, flex=1), _txt(n["title"], size="xs", flex=14)]})
                 body.append(_txt(f"  {n['source']} · {n['time'].astimezone(TH):%H:%M} น.", size="xxs", color=MUTED))
         else:
             body.append(_txt("ดึงข่าวไม่ได้ / ไม่มีข่าวใน 24 ชม.", size="xs", color=MUTED))
+    if not summary and any(news.values()):
+        body.append(_txt("▲▼ ประเมินจากคำในหัวข่าวทั้งหมด 24 ชม. (ไม่ใช่การวิเคราะห์ผลกระทบ)", size="xxs", color=MUTED, margin="md"))
     if note:
         body.append(_txt(note, size="xxs", color=MUTED, margin="md"))
 
