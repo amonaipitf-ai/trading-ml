@@ -25,3 +25,5 @@ plan_created_utc,bar_date,asset,side,outcome,r,entry_time_utc
 2026-10-15T22:12:49+00:00,2026-10-15,DXY,sell,no_entry,0.0,
 2026-10-16T22:13:31+00:00,2026-10-16,XAUUSD,buy,no_entry,0.0,
 2026-10-16T22:13:31+00:00,2026-10-16,XAUUSD,sell,no_entry,0.0,
+2026-10-17T22:07:52+00:00,2026-10-17,XAUUSD,buy,no_entry,0.0,
+2026-10-17T22:07:52+00:00,2026-10-17,XAUUSD,sell,no_entry,0.0,
