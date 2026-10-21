@@ -8,7 +8,12 @@ on:
     - cron: "*/15 23 * * 0-4"
     - cron: "*/15 0-10 * * 1-5"
     - cron: "*/30 11-15 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "ทดสอบส่ง LINE แจ้งเตือนไฮเดิมทันที"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -38,6 +43,7 @@ jobs:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_TO: ${{ secrets.LINE_TO }}
+          TEST_SEND: ${{ inputs.test && '1' || '' }}
         run: python3 prev_high_watch.py
 
       - name: จำว่าแจ้งเตือนไปแล้ว

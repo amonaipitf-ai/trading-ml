@@ -13,6 +13,7 @@
 แจ้งครั้งเดียวต่อไฮหนึ่งระดับ · จำไว้ใน data/prev_high_state.json
 ไม่ส่งช่วง 23:00–05:59 น. เวลาไทย · ส่งแบบไม่มีเสียงเตือน
 ทดสอบโดยไม่ส่งจริง: DRY_RUN=1 python3 prev_high_watch.py
+ทดสอบส่ง LINE จริงทันที (ไม่สนช่วงงดแจ้ง/เกณฑ์ ไม่บันทึก state): TEST_SEND=1 python3 prev_high_watch.py
 ใช้แค่ไลบรารีมาตรฐาน
 """
 
@@ -112,8 +113,29 @@ def check(asset, a, st, cfg):
     return None, st
 
 
+def test_text(asset, a, cfg):
+    dec = cfg["dec"]
+    if a is None:
+        return f"🧪 ทดสอบ · {asset}: ดึงราคาไม่ได้ / ตลาดปิด"
+    gap = a["ph"] - a["close"]
+    return "\n".join([
+        f"🧪 ทดสอบระบบแจ้งเตือนไฮเดิม · {asset}",
+        f"ราคาล่าสุด {f(a['close'], dec)} · ไฮเดิม 8 ชม. {f(a['ph'], dec)} · โลว์ {f(a['pl'], dec)}",
+        f"ตำแหน่งในกรอบ {a['pos']:.2f} (แจ้งจริงเมื่อ ≥ {NEAR:.2f}) · ห่างไฮ {f(gap, dec)}",
+        "ข้อความนี้เป็นการทดสอบ ไม่ใช่สัญญาณเทรด",
+    ])
+
+
 def main():
     now = datetime.now(timezone.utc)
+    if os.environ.get("TEST_SEND"):
+        texts = []
+        for asset, cfg in CFG.items():
+            a = analyse(bars_15m(asset, now - LOOKBACK - timedelta(hours=2)), now)
+            texts.append(test_text(asset, a, cfg))
+        print("\n\n".join(texts))
+        send(texts)
+        return
     hour = now.astimezone(TH).hour
     if hour >= QUIET[0] or hour < QUIET[1]:
         print("ช่วงเวลางดแจ้งเตือน (23:00–06:00 น.)")
