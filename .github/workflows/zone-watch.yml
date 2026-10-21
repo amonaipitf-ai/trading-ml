@@ -2,10 +2,12 @@ name: Zone watch
 
 on:
   schedule:
-    # เวลาไทย จันทร์–ศุกร์: ทุก 30 นาที 08:00–13:59 และทุก 15 นาที 14:00–22:59
-    # ไม่รันช่วง 23:00–05:00 น. (เวลานอน) · ทุกข้อความส่งแบบไม่มีเสียงเตือน
-    - cron: "*/30 1-6 * * 1-5"
-    - cron: "*/15 7-15 * * 1-5"
+    # เวลาไทย จันทร์–ศุกร์: ทุก 15 นาที 06:00–17:59 (ช่วงที่เทรดได้ผลดีสุด) และทุก 30 นาที 18:00–22:59
+    # ไม่รันช่วง 23:00–05:59 น. (เวลานอน) · ทุกข้อความส่งแบบไม่มีเสียงเตือน
+    # ประมาณ 58 รอบ/วัน ≈ 1,300 นาที Actions/เดือน (repo private ฟรี 2,000 นาที)
+    - cron: "*/15 23 * * 0-4"
+    - cron: "*/15 0-10 * * 1-5"
+    - cron: "*/30 11-15 * * 1-5"
   workflow_dispatch: {}
 
 permissions:
@@ -29,12 +31,21 @@ jobs:
           LINE_TO: ${{ secrets.LINE_TO }}
         run: python3 zone_watch.py
 
+      - name: เช็กราคาใกล้ไฮเดิม (วิธี Short ที่ไฮเดิม)
+        if: always()
+        continue-on-error: true
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+        run: python3 prev_high_watch.py
+
       - name: จำว่าแจ้งเตือนไปแล้ว
         if: always()
         run: |
           git config user.name "forecast-bot"
           git config user.email "forecast-bot@users.noreply.github.com"
-          for f in data/watch_state.json; do [ -f "$f" ] && git add "$f"; done
+          for f in data/watch_state.json data/prev_high_state.json; do [ -f "$f" ] && git add "$f"; done
           git diff --cached --quiet && exit 0
           git commit -m "watch $(date -u +%Y-%m-%dT%H:%M)"
           git pull --rebase --autostash -q && git push -q
