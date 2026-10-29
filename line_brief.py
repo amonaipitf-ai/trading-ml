@@ -315,7 +315,7 @@ def send(messages):
             sys.exit(1)  # ให้ Actions ขึ้นสีแดง
         return
     url = "https://api.line.me/v2/bot/message/" + ("push" if to else "broadcast")
-    payload = {"messages": messages, "notificationDisabled": True}  # ส่งแบบไม่มีเสียงเตือน
+    payload = {"messages": messages, "notificationDisabled": False}  # สรุปเช้ามีเสียงเตือน (แจ้งเตือนราคาระหว่างวันยังเงียบ)
     if to:
         payload["to"] = to
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST", headers={
