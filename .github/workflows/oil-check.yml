@@ -14,26 +14,10 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Compare WTI feeds
-        env:
-          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+      - name: Test levels.py oil loader
         run: |
           python - <<'EOF'
-          import json, os, urllib.parse, urllib.request
-          import yfinance as yf, pandas as pd
-          pd.set_option("display.width", 200)
-          for iv in ["1h", "30m", "15m", "5m"]:
-              d = yf.Ticker("CL=F").history(period="5d", interval=iv, prepost=True)
-              d = d[["Open", "High", "Low", "Close"]].round(2)
-              for day in ["2026-10-29", "2026-10-30"]:
-                  x = d[d.index.strftime("%Y-%m-%d") == day]
-                  print(iv, day, "last bars:"); print(x.tail(4).to_string())
-          key = os.environ.get("TWELVEDATA_API_KEY", "")
-          for s in ["WTI/USD", "CL", "USOIL", "XTI/USD", "WTICO/USD"]:
-              q = urllib.parse.urlencode({"symbol": s, "interval": "1day", "outputsize": 4, "apikey": key})
-              try:
-                  r = json.loads(urllib.request.urlopen(f"https://api.twelvedata.com/time_series?{q}", timeout=30).read())
-                  print("twelvedata", s, r.get("status"), str(r.get("values", r.get("message")))[:300])
-              except Exception as e:
-                  print("twelvedata", s, "fail", e)
+          import levels, pandas as pd
+          d = levels.from_yahoo_hourly("CL=F")
+          print(d.round(2).tail(6).to_string())
           EOF

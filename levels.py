@@ -52,9 +52,51 @@ def from_yahoo_hourly(ticker: str) -> pd.DataFrame:
         df.columns = df.columns.get_level_values(0)
     df = df[["Open", "High", "Low", "Close"]].dropna()
     idx = df.index.tz_convert("America/New_York").tz_localize(None) if df.index.tz is not None else df.index
-    h = pd.DataFrame({"datetime": idx.astype(str), "open": df["Open"].values, "high": df["High"].values,
+    df.index = idx
+    try:
+        df = fix_settlement_stamp(ticker, df)
+    except Exception as e:  # แก้ไม่ได้ก็ใช้ข้อมูลเดิม
+        print(f"  {ticker}: แก้แท่งปิดตลาดไม่ได้ ({type(e).__name__})")
+    h = pd.DataFrame({"datetime": df.index.astype(str), "open": df["Open"].values, "high": df["High"].values,
                       "low": df["Low"].values, "close": df["Close"].values})
     return hourly_to_daily(h)
+
+
+def fix_settlement_stamp(ticker: str, hourly: pd.DataFrame) -> pd.DataFrame:
+    """Yahoo เอาราคา settlement (ตั้งตอน 14:30 NY) ไปทับแท่งสุดท้ายของแต่ละวัน (16:55 NY)
+    ทำให้ราคาปิด/สูงสุดผิดจากราคาซื้อขายจริง (เช่น CL=F 30 ต.ค. 2026: แท่งสุดท้ายถูกทับเป็น 104.12
+    ทั้งที่ซื้อขายจริงตอนปิดราว 102.9 · Exness ปิด 102.74) -> ใช้แท่ง 5 นาทีแก้แท่ง 1 ชม. สุดท้ายของวัน
+    ราคาปิดจริง = ราคาเปิดของแท่ง 5 นาทีสุดท้าย (ส่วนที่เหลือของแท่งนั้นถูกทับด้วย settlement)"""
+    import yfinance as yf
+
+    m5 = yf.download(ticker, period="60d", interval="5m", auto_adjust=False, progress=False)
+    if isinstance(m5.columns, pd.MultiIndex):
+        m5.columns = m5.columns.get_level_values(0)
+    m5 = m5[["Open", "High", "Low", "Close"]].dropna()
+    if m5.empty:
+        return hourly
+    if m5.index.tz is not None:
+        m5.index = m5.index.tz_convert("America/New_York").tz_localize(None)
+    out = hourly.copy()
+    session = (m5.index + pd.Timedelta(hours=7)).normalize()      # วันใหม่เริ่ม 17:00 NY
+    fixed = 0
+    for _, bars in m5.groupby(session):
+        last = bars.iloc[-1]
+        t_last = bars.index[-1]
+        if t_last.hour != 16:                                          # วันนั้นไม่ได้ปิดตามปกติ (เช่นวันหยุด) ข้าม
+            continue
+        hour_start = t_last.floor("h")
+        if hour_start not in out.index:
+            continue
+        real_close = float(last["Open"])
+        inside = bars[(bars.index >= hour_start) & (bars.index < t_last)]
+        hi = max([real_close, *inside["High"].tolist()])
+        lo = min([real_close, *inside["Low"].tolist()])
+        out.loc[hour_start, ["High", "Low", "Close"]] = [hi, lo, real_close]
+        fixed += 1
+    if fixed:
+        print(f"  {ticker}: แก้ราคาปิดตลาดจาก settlement เป็นราคาซื้อขายจริง {fixed} วัน")
+    return out
 
 
 def from_stooq(symbol: str) -> pd.DataFrame:
