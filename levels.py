@@ -59,6 +59,7 @@ def from_yahoo_hourly(ticker: str) -> pd.DataFrame:
         print(f"  {ticker}: แก้แท่งปิดตลาดไม่ได้ ({type(e).__name__})")
     h = pd.DataFrame({"datetime": df.index.astype(str), "open": df["Open"].values, "high": df["High"].values,
                       "low": df["Low"].values, "close": df["Close"].values})
+    keep_hourly(f"yahoo_h:{ticker}", h)
     return hourly_to_daily(h)
 
 
@@ -117,7 +118,9 @@ def from_twelvedata(symbol: str) -> pd.DataFrame:
     data = json.loads(urllib.request.urlopen(f"https://api.twelvedata.com/time_series?{q}", timeout=60).read())
     if data.get("status") != "ok":
         raise RuntimeError(f"twelvedata: {str(data.get('message', ''))[:120]}")
-    return hourly_to_daily(pd.DataFrame(data["values"]))
+    h = pd.DataFrame(data["values"])
+    keep_hourly(f"twelvedata:{symbol}", h)
+    return hourly_to_daily(h)
 
 
 def hourly_to_daily(h: pd.DataFrame, now_ny=None) -> pd.DataFrame:
@@ -147,6 +150,40 @@ def fetch(kind: str, sym: str) -> pd.DataFrame:
 
 
 ERRORS = {}
+HOURLY = {}   # แท่ง 1 ชม. (เวลานิวยอร์ก) ของแหล่งที่ใช้ -> ใช้วาดกราฟ H1 ในสรุปเช้า
+
+
+def keep_hourly(source: str, h: pd.DataFrame):
+    x = h.copy()
+    x.index = pd.to_datetime(x["datetime"])
+    x = x[["open", "high", "low", "close"]].astype(float).sort_index()
+    x.columns = ["Open", "High", "Low", "Close"]
+    HOURLY[source] = x
+
+
+def hourly_for(asset: str, source: str):
+    """แท่ง H1 (เวลานิวยอร์ก) ของตัวนี้ ไม่รวมช่วงตลาดปิดสุดสัปดาห์ · ไม่มีคืน None"""
+    h = HOURLY.get(source)
+    if h is None:   # แหล่งรายวัน (เช่น DXY) -> ดึง H1 จาก Yahoo แยก
+        tk = source.split(":", 1)[1] if source.startswith("yahoo:") else None
+        if not tk:
+            return None
+        try:
+            import yfinance as yf
+            df = yf.download(tk, period="15d", interval="60m", auto_adjust=False, progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            df = df[["Open", "High", "Low", "Close"]].dropna()
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert("America/New_York").tz_localize(None)
+            h = df
+        except Exception as e:
+            print(f"  {asset}: ดึง H1 ไม่ได้ ({type(e).__name__})")
+            return None
+    wd, hr = h.index.dayofweek, h.index.hour
+    closed = (wd == 5) | ((wd == 6) & (hr < 18)) | ((wd == 4) & (hr >= 17))
+    h = h[~closed]
+    return h if len(h) >= 24 else None
 
 
 def load(asset: str):
@@ -252,6 +289,56 @@ def draw_chart(asset: str, df: pd.DataFrame, row: dict, path: str):
     plt.close(fig)
 
 
+def draw_chart_h1(asset: str, h: pd.DataFrame, row: dict, path: str, days: int = 5):
+    """กราฟ H1 ย้อนหลังราว 5 วันทำการ + เส้น R2/R1/Pivot/S1/S2 ของวันนี้ · หัวกราฟบอกแนวโน้ม D1"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    th = (h.index.tz_localize("America/New_York", ambiguous=False, nonexistent="shift_forward")
+          .tz_convert("Asia/Bangkok"))          # ป้ายวันบนแกน X เป็นเวลาไทย
+    session = (h.index + pd.Timedelta(hours=7)).normalize()   # วันซื้อขายเริ่ม 17:00 NY
+    keep = session.isin(sorted(set(session))[-days:])
+    v = h[keep].copy()
+    v["th"] = th[keep]
+    v["session"] = session[keep]
+    v = v.reset_index(drop=True)
+    v["ema20"] = h["Close"].ewm(span=20).mean()[keep].values
+
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    for i, b in v.iterrows():
+        col = "#1e8e3e" if b["Close"] >= b["Open"] else "#d93025"
+        ax.vlines(i, b["Low"], b["High"], color=col, lw=0.7)
+        ax.add_patch(plt.Rectangle((i - 0.3, min(b["Open"], b["Close"])), 0.6,
+                                   max(abs(b["Close"] - b["Open"]), 1e-9), color=col))
+    ax.plot(v.index, v["ema20"], color="#f29900", lw=1.1, label="EMA20 (H1)")
+    starts = v.index[v["session"] != v["session"].shift()].tolist()
+    for s0 in starts[1:]:
+        ax.axvline(s0 - 0.5, color="#9aa0a6", lw=0.6, ls=":")
+    x0, x1 = len(v) - 0.5, len(v) + 16      # ระดับของ "วันนี้" วาดในพื้นที่ว่างทางขวา (ยังไม่มีแท่ง)
+    ax.axvspan(x0, x1, color="#f1f3f4", lw=0)
+    ax.text((x0 + x1) / 2, 1.0, "TODAY", transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+            fontsize=8, color="#5f6368")
+    for key, col, lab in (("resistance_2", "#d93025", "R2"), ("resistance_1", "#ea8600", "R1"),
+                          ("P", "#5f6368", "P"),
+                          ("support_1", "#188038", "S1"), ("support_2", "#0b8043", "S2")):
+        val = row.get(key)
+        if val:
+            ax.hlines(val, x0, x1, colors=col, linestyles="--", lw=1)
+            ax.text(x1 + 0.5, val, f"{lab} {val}", va="center", fontsize=8, color=col)
+    ax.set_xticks(starts)
+    ax.set_xticklabels([v.loc[i, "th"].strftime("%a %d %b") for i in starts], fontsize=8)
+    ax.set_xlim(-1, x1 + 11)
+    trend = {"up": "UP", "down": "DOWN"}.get(str(row.get("trend_en")), "SIDEWAYS")
+    ax.set_title(f"{asset} H1 · close {row['close']} · D1 trend: {trend} · RSI(D1) {row['rsi14']}", fontsize=10)
+    ax.grid(alpha=0.2)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(fontsize=8, frameon=False, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
 def compute(asset: str, df: pd.DataFrame) -> dict:
     d = DECIMALS[asset]
     last = df.iloc[-1]
@@ -328,10 +415,22 @@ def main():
         row["source"] = src
         row["source_notes"] = "; ".join(ERRORS.get(asset, []))
         os.makedirs(os.path.join(OUT, "charts"), exist_ok=True)
-        try:
-            draw_chart(asset, df, row, os.path.join(OUT, "charts", f"{asset}.png"))
+        charts = os.path.join(OUT, "charts")
+        try:   # D1 เก็บไว้ดูแนวโน้มใหญ่ (levels.md)
+            draw_chart(asset, df, row, os.path.join(charts, f"{asset}_D1.png"))
         except Exception as e:
-            print(f"  วาดกราฟ {asset} ไม่สำเร็จ: {e}")
+            print(f"  วาดกราฟ D1 {asset} ไม่สำเร็จ: {e}")
+        try:   # กราฟหลัก (ส่งเข้า LINE) = H1 · ไม่มี H1 ใช้ D1 แทน
+            h1 = hourly_for(asset, src)
+            if h1 is None:
+                raise RuntimeError("ไม่มีแท่ง H1")
+            draw_chart_h1(asset, h1, row, os.path.join(charts, f"{asset}.png"))
+        except Exception as e:
+            print(f"  วาดกราฟ H1 {asset} ไม่สำเร็จ ({e}) — ใช้ D1 แทน")
+            try:
+                draw_chart(asset, df, row, os.path.join(charts, f"{asset}.png"))
+            except Exception as e2:
+                print(f"  วาดกราฟ {asset} ไม่สำเร็จ: {e2}")
         rows.append(row)
         print(f"::notice::{asset} ปิด {row['close']} (แท่ง {row['bar_date']}) แหล่ง {src}"
               + (f" | ลองแล้วไม่ได้: {row['source_notes']}" if row['source_notes'] else ""))
@@ -350,7 +449,8 @@ def main():
     for r in rows:
         lines.append(f"| {r['asset']} | {r['trend']} | {r['price_vs_ma20']} | {r['rsi14']} ({r['rsi_state']}) | "
                      f"{r['macd_state']} | {r['chg_5d_pct']}% | {r['chg_20d_pct']}% |")
-    lines += ["", *[f"![{r['asset']}](charts/{r['asset']}.png)" for r in rows]]
+    lines += ["", "### กราฟ H1 (5 วัน) + แนวรับ–แนวต้านวันนี้", *[f"![{r['asset']} H1](charts/{r['asset']}.png)" for r in rows],
+              "", "### กราฟ D1 (แนวโน้มใหญ่)", *[f"![{r['asset']} D1](charts/{r['asset']}_D1.png)" for r in rows]]
     lines.append(f"\nแท่งเทียนวันที่ {rows[0]['bar_date']} · แหล่งข้อมูล: " + ", ".join(f"{r['asset']}={r['source']}" for r in rows))
     with open(os.path.join(OUT, "levels.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
