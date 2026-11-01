@@ -33,6 +33,17 @@ jobs:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python levels.py
 
+      - name: เผยแพร่กราฟวันนี้ (ให้ LINE ดึงรูปได้)
+        continue-on-error: true   # ถ้าไม่สำเร็จ ยังส่งสรุปได้ แค่ไม่มีรูปกราฟ
+        run: |
+          git config user.name "forecast-bot"
+          git config user.email "forecast-bot@users.noreply.github.com"
+          git add output/charts/XAUUSD.png output/charts/USOIL.png output/charts/DXY.png output/levels.csv output/levels.md
+          git diff --cached --quiet || git commit -q -m "charts $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash -q && git push -q
+          # ลิงก์ผูกกับ commit นี้ (รูปไม่ค้างแคชของเมื่อวาน)
+          echo "CHART_BASE_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
       - name: ส่งสรุปเข้า LINE (และบันทึกแผน/วัดผลแผนรอบก่อน)
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}

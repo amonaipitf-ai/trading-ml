@@ -10,6 +10,9 @@ Buy ที่แนวรับ / Sell ที่แนวต้าน พร้�
   LINE_TO                    (ไม่บังคับ) User ID ผู้รับ (ขึ้นต้นด้วย U...)
                              ถ้าไม่ใส่ จะส่งแบบ broadcast ถึงทุกคนที่เพิ่มเพื่อน OA นี้
 
+  CHART_BASE_URL             (ตั้งอัตโนมัติใน workflow) ลิงก์ raw ของ commit ที่มีกราฟวันนี้
+                             ถ้ามี จะแสดงกราฟแท่งเทียน output/charts/<asset>.png บนหัวการ์ดแต่ละตัว
+
 ถ้าไม่มี token จะไม่ส่ง แต่บันทึกข้อความไว้ที่ output/line_message.json (ไว้ทดสอบ)
 หมายเหตุ: เป็นข้อมูลประกอบการตัดสินใจ ไม่ใช่คำแนะนำการลงทุน
 """
@@ -41,6 +44,25 @@ GREEN, RED = "#2FBF71", "#F0565A"
 HALF_ZONE = 0.08   # ครึ่งความกว้างโซน = 0.08 x ATR
 STOP_PAD = 0.25    # Stop Loss ห่างจากขอบโซน 0.25 x ATR
 MIN_RR = 1.2       # TP1 ที่ R:R ต่ำกว่านี้ จะมีคำเตือน
+
+
+def chart_hero(asset):
+    """รูปกราฟแท่งเทียนบนหัวการ์ด (แตะเพื่อดูรูปเต็ม) · ไม่มีลิงก์/ไฟล์ → ไม่แสดง"""
+    base = os.environ.get("CHART_BASE_URL", "").strip().rstrip("/")
+    path = os.path.join(OUT, "charts", f"{asset}.png")
+    if not base.startswith("https://") or not os.path.exists(path):
+        return None
+    ratio = "1100:506"
+    try:
+        from PIL import Image
+        w, h = Image.open(path).size
+        ratio = f"{w}:{h}"
+    except Exception:
+        pass
+    url = f"{base}/{OUT}/charts/{asset}.png"
+    return {"type": "image", "url": url, "size": "full", "aspectRatio": ratio,
+            "aspectMode": "fit", "backgroundColor": "#FFFFFF",
+            "action": {"type": "uri", "label": "chart", "uri": url}}
 
 
 def thai_date(d: datetime) -> str:
@@ -228,10 +250,10 @@ def bubble(row, cal):
                  plan_box("แผน Sell (ฝั่งขาย)", pl["sell"], dec, False)]
     body += track_box(row["asset"], m["accent"])
 
-    return {
+    card = {
         "type": "bubble", "size": "mega",
-        "styles": {"header": {"backgroundColor": BG}, "body": {"backgroundColor": BG},
-                   "footer": {"backgroundColor": BG}},
+        "styles": {"header": {"backgroundColor": BG}, "hero": {"backgroundColor": BG},
+                   "body": {"backgroundColor": BG}, "footer": {"backgroundColor": BG}},
         "header": {"type": "box", "layout": "vertical", "paddingBottom": "6px", "contents": [
             {"type": "box", "layout": "horizontal", "contents": [
                 txt(row["asset"], size="xxl", weight="bold", flex=6),
@@ -248,6 +270,10 @@ def bubble(row, cal):
                 size="xxs", color=MUTED),
         ]},
     }
+    hero = chart_hero(row["asset"])
+    if hero:
+        card["hero"] = hero
+    return card
 
 
 def track_box(asset, accent):
