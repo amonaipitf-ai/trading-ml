@@ -10,8 +10,14 @@
 | USOIL | ไซด์เวย์/ไม่ชัด | เหนือ | 60.2 (กลางๆ) | บวก อ่อนลง | -0.35% | 12.75% |
 | DXY | ขาขึ้น | ใต้ | 53.4 (กลางๆ) | ลบ แรงขึ้น | 0.07% | -0.05% |
 
-![XAUUSD](charts/XAUUSD.png)
-![USOIL](charts/USOIL.png)
-![DXY](charts/DXY.png)
+### กราฟ H1 (5 วัน) + แนวรับ–แนวต้านวันนี้
+![XAUUSD H1](charts/XAUUSD.png)
+![USOIL H1](charts/USOIL.png)
+![DXY H1](charts/DXY.png)
+
+### กราฟ D1 (แนวโน้มใหญ่)
+![XAUUSD D1](charts/XAUUSD_D1.png)
+![USOIL D1](charts/USOIL_D1.png)
+![DXY D1](charts/DXY_D1.png)
 
 แท่งเทียนวันที่ 2026-10-30 · แหล่งข้อมูล: XAUUSD=twelvedata:XAU/USD, USOIL=yahoo_h:CL=F, DXY=yahoo:DX-Y.NYB
