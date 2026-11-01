@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       test:
-        description: "ทดสอบส่ง LINE แจ้งเตือนไฮเดิมทันที"
+        description: "ทดสอบส่ง LINE แจ้งเตือนไฮเดิม/โลเดิมทันที"
         type: boolean
         default: false
 
@@ -36,7 +36,7 @@ jobs:
           LINE_TO: ${{ secrets.LINE_TO }}
         run: python3 zone_watch.py
 
-      - name: เช็กราคาใกล้ไฮเดิม (วิธี Short ที่ไฮเดิม)
+      - name: เช็กราคาใกล้ไฮเดิม / โลเดิม
         if: always()
         continue-on-error: true
         env:

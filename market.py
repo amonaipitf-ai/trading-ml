@@ -52,17 +52,25 @@ def _yahoo(symbol: str):
     return out
 
 
+def market_open(t: datetime) -> bool:
+    """ตัดแท่งช่วงตลาดปิดสุดสัปดาห์ (ศ. 22:00 – อา. 22:00 UTC) — บางแหล่งส่งแท่งราคานิ่งมาให้
+    เช่น Twelve Data XAU/USD วันอาทิตย์ 1 พ.ย. 2026 ทำให้แจ้งเตือนไฮเดิมหลอก"""
+    t = t.astimezone(timezone.utc)
+    wd = t.weekday()
+    return not (wd == 5 or (wd == 6 and t.hour < 22) or (wd == 4 and t.hour >= 22))
+
+
 def bars_15m(asset: str, since: datetime):
-    """แท่ง 15 นาทีที่เริ่มตั้งแต่ since เป็นต้นไป; ดึงไม่ได้คืน [] พร้อมคำเตือน"""
+    """แท่ง 15 นาทีที่เริ่มตั้งแต่ since เป็นต้นไป (ไม่รวมช่วงตลาดปิดสุดสัปดาห์); ดึงไม่ได้คืน [] พร้อมคำเตือน"""
     errors = []
     for sym in TD.get(asset, []):
         try:
-            return sorted(b for b in _twelvedata(sym) if b[0] >= since)
+            return sorted(b for b in _twelvedata(sym) if b[0] >= since and market_open(b[0]))
         except Exception as e:
             errors.append(f"twelvedata:{sym} {type(e).__name__}: {str(e)[:60]}")
     if asset in YAHOO:
         try:
-            return sorted(b for b in _yahoo(YAHOO[asset]) if b[0] >= since)
+            return sorted(b for b in _yahoo(YAHOO[asset]) if b[0] >= since and market_open(b[0]))
         except Exception as e:
             errors.append(f"yahoo:{YAHOO[asset]} {type(e).__name__}")
     print(f"::warning::ดึงราคา 15 นาทีของ {asset} ไม่ได้ ({'; '.join(errors)})")

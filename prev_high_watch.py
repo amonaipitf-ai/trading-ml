@@ -1,5 +1,6 @@
 """
-แจ้งเตือน LINE เมื่อราคาขึ้นมาใกล้ "ไฮเดิม" (จุดสูงสุดของ 8 ชั่วโมงก่อนหน้า) — ใช้กับวิธี Short ที่ไฮเดิม
+แจ้งเตือน LINE เมื่อราคาขึ้นมาใกล้ "ไฮเดิม" หรือลงมาใกล้ "โลเดิม" (จุดสูงสุด/ต่ำสุดของ 8 ชั่วโมงก่อนหน้า)
+ไฮเดิม = วิธี Short ที่ไฮเดิม · โลเดิม = ฝั่งกลับกัน (Buy ที่โลเดิม, เพิ่ม 1 พ.ย. 2026)
 ==========================================================================================
 ตัวที่เฝ้า: XAUUSD และ USOIL (ราคา 15 นาทีจาก market.bars_15m)
 
@@ -9,6 +10,11 @@
   - แท่งปิดเหนือไฮเดิม                        -> การ์ดสีแดง "ทะลุไฮ — ไม่ Short"
     (ส่งเฉพาะเมื่อเคยแจ้ง "ใกล้ไฮเดิม" ของไฮนั้นไปแล้ว)
 เกณฑ์ 0.90 มาจากผลเทรดจริง 12–21 ต.ค. 2026: Short ที่ไฮเดิมได้กำไร ส่วน Short ตอนราคาทะลุไฮ / กลางกรอบ ขาดทุน
+
+ฝั่งโลเดิม (กลับด้าน):
+  - ตำแหน่ง ≤ 0.10 และแท่งปิดไม่ต่ำกว่าโลเดิม -> การ์ดสีเขียว "ใกล้โลเดิม" (จังหวะรอสัญญาณ Buy)
+  - แท่งปิดใต้โลเดิม (หลังเคยแจ้งใกล้โลว์นั้น) -> การ์ดสีแดง "หลุดโลว์ — ไม่ Buy"
+  ฝั่ง Buy ยังไม่มีผลเทรดจริงยืนยันเหมือนฝั่ง Short · state เก็บแยกที่คีย์ "<asset>_low"
 
 แจ้งครั้งเดียวต่อไฮหนึ่งระดับ · จำไว้ใน data/prev_high_state.json
 ไม่ส่งช่วง 00:00–04:59 น. เวลาไทย · ส่งแบบไม่มีเสียงเตือน · ส่งเป็นการ์ด (LINE Flex) โทนเดียวกับสรุปเช้า
@@ -72,7 +78,9 @@ def analyse(bars, now):
     pl = min(b[3] for b in prior)
     if ph <= pl:
         return None
-    return {"t": t, "high": h, "close": c, "ph": ph, "pl": pl, "pos": (h - pl) / (ph - pl)}
+    return {"t": t, "high": h, "low": l, "close": c, "ph": ph, "pl": pl,
+            "pos": (h - pl) / (ph - pl),          # ไฮแท่งล่าสุดอยู่ตรงไหนของกรอบ (ใช้กับไฮเดิม)
+            "pos_low": (l - pl) / (ph - pl)}      # โลว์แท่งล่าสุดอยู่ตรงไหนของกรอบ (ใช้กับโลเดิม)
 
 
 # ---------- การ์ด LINE Flex ----------
@@ -89,56 +97,65 @@ def row(label, value, color=TEXT, big=False):
     ]}
 
 
-def card(asset, kind, a, cfg):
-    """kind: near | break | test"""
+def card(asset, kind, a, cfg, side="high"):
+    """kind: near | break | test · side: high (ไฮเดิม/Short) | low (โลเดิม/Buy)"""
     dec = cfg["dec"]
-    color = {"near": ORANGE, "break": RED, "test": MUTED}[kind]
-    badge = {"near": "ใกล้ไฮเดิม", "break": "ทะลุไฮ — ไม่ Short", "test": "🧪 ทดสอบ"}[kind]
+    hi = side == "high"
+    color = {"near": ORANGE if hi else GREEN, "break": RED, "test": MUTED}[kind]
+    badge = {"near": "ใกล้ไฮเดิม" if hi else "ใกล้โลเดิม",
+             "break": "ทะลุไฮ — ไม่ Short" if hi else "หลุดโลว์ — ไม่ Buy", "test": "🧪 ทดสอบ"}[kind]
     when = (a["t"] + BAR).astimezone(TH)
-    gap = a["ph"] - a["close"]
+    level = a["ph"] if hi else a["pl"]
+    gap = (a["ph"] - a["close"]) if hi else (a["close"] - a["pl"])
+    word = "ไฮ" if hi else "โลว์"
 
     body = [
         row("ราคาตอนนี้", f(a["close"], dec), color, big=True),
-        row("ไฮเดิม (8 ชม.)", f(a["ph"], dec), RED),
-        row("ห่างจากไฮ", f(gap, dec) if gap >= 0 else f"เกินไฮ {f(-gap, dec)}", TEXT),
+        row(f"{'ไฮเดิม' if hi else 'โลเดิม'} (8 ชม.)", f(level, dec), RED if hi else GREEN),
+        row(f"ห่างจาก{word}", f(gap, dec) if gap >= 0 else f"{'เกินไฮ' if hi else 'หลุดโลว์'} {f(-gap, dec)}", TEXT),
     ]
     if kind == "break":
         body += [
             {"type": "separator", "color": "#1E2636", "margin": "md"},
             {"type": "box", "layout": "vertical", "paddingAll": "10px", "cornerRadius": "10px",
              "backgroundColor": "#2A1418", "margin": "md", "contents": [
-                 txt("⛔ แท่ง M15 ปิดเหนือไฮเดิมแล้ว", color=RED, weight="bold", size="md"),
-                 txt("ห้าม Short ตอนนี้", color=TEXT, weight="bold"),
-                 txt("ถ้ามีไม้ Short ค้าง ให้พิจารณาตัดขาดทุน", size="xs", color=MUTED),
+                 txt(f"⛔ แท่ง M15 ปิด{'เหนือไฮเดิม' if hi else 'ใต้โลเดิม'}แล้ว", color=RED, weight="bold", size="md"),
+                 txt(f"ห้าม {'Short' if hi else 'Buy'} ตอนนี้", color=TEXT, weight="bold"),
+                 txt(f"ถ้ามีไม้ {'Short' if hi else 'Buy'} ค้าง ให้พิจารณาตัดขาดทุน", size="xs", color=MUTED),
              ]},
         ]
     else:
-        sl = a["ph"] + cfg["buffer"]
+        sl = (a["ph"] + cfg["buffer"]) if hi else (a["pl"] - cfg["buffer"])
         tp = (a["ph"] + a["pl"]) / 2
-        risk = (sl - a["close"]) * cfg["usd_per_unit"]
+        risk = abs(sl - a["close"]) * cfg["usd_per_unit"]
         plan = [
-            txt("ถ้าจะ Short", color=RED, weight="bold", size="md"),
+            txt("ถ้าจะ Short" if hi else "ถ้าจะ Buy", color=RED if hi else GREEN, weight="bold", size="md"),
             row("Stop Loss", f(sl, dec), RED),
             row("Take Profit", f(tp, dec), GREEN),
             row(f"เสี่ยง ({cfg['lot']} lot)", f"{risk:,.1f} USD", YELLOW if risk > MAX_RISK_USD else TEXT),
         ]
         if risk > MAX_RISK_USD:
-            plan.append(txt("⚠ เสี่ยงเกิน 14 USD — ลดไม้ หรือรอราคาใกล้ไฮกว่านี้", size="xs", color=YELLOW))
+            plan.append(txt(f"⚠ เสี่ยงเกิน 14 USD — ลดไม้ หรือรอราคาใกล้{word}กว่านี้", size="xs", color=YELLOW))
+        tips = [
+            txt("✅ รอแท่ง M15 กลับตัวก่อนเข้า", size="sm", margin="md"),
+            txt(f"⛔ แท่งปิด{'เหนือไฮ' if hi else 'ใต้โลว์'} = ไม่ {'Short' if hi else 'Buy'}", size="sm"),
+        ]
+        if not hi:
+            tips.append(txt("ℹ ฝั่ง Buy ที่โลเดิมยังไม่มีผลเทรดจริงยืนยัน · เช็กแนวโน้ม D1 ก่อน", size="xs", color=MUTED))
         body += [
             {"type": "box", "layout": "vertical", "spacing": "xs", "paddingAll": "10px",
-             "cornerRadius": "10px", "borderWidth": "1px", "borderColor": RED,
-             "backgroundColor": "#1D1012", "margin": "md", "contents": plan},
-            txt("✅ รอแท่ง M15 กลับตัวก่อนเข้า", size="sm", margin="md"),
-            txt("⛔ แท่งปิดเหนือไฮ = ไม่ Short", size="sm"),
+             "cornerRadius": "10px", "borderWidth": "1px", "borderColor": RED if hi else GREEN,
+             "backgroundColor": "#1D1012" if hi else "#0F1D16", "margin": "md", "contents": plan},
+            *tips,
         ]
     if kind == "test":
-        body.append(txt(f"ตำแหน่งในกรอบ {a['pos']:.2f} · แจ้งจริงเมื่อ ≥ {NEAR:.2f}",
+        body.append(txt(f"ตำแหน่งในกรอบ {a['pos']:.2f} · แจ้งจริงเมื่อ ≥ {NEAR:.2f} (ไฮ) / ≤ {1 - NEAR:.2f} (โลว์)",
                         size="xs", color=MUTED, margin="md"))
 
     foot = " · ".join(x for x in (cfg["note"], "ไม่ใช่คำแนะนำการลงทุน") if x)
     return {
         "type": "flex",
-        "altText": f"{asset} {badge} {f(a['ph'], dec)} · ราคา {f(a['close'], dec)}",
+        "altText": f"{asset} {badge} {f(level, dec)} · ราคา {f(a['close'], dec)}",
         "contents": {
             "type": "bubble", "size": "kilo",
             "styles": {"header": {"backgroundColor": BG}, "body": {"backgroundColor": BG},
@@ -181,7 +198,7 @@ def send(messages):
         "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            print(f"::notice::ส่งแจ้งเตือนไฮเดิม {len(messages)} การ์ด HTTP {r.status}")
+            print(f"::notice::ส่งแจ้งเตือนไฮเดิม/โลเดิม {len(messages)} การ์ด HTTP {r.status}")
     except urllib.error.HTTPError as e:
         print(f"::error::ส่ง LINE ไม่สำเร็จ HTTP {e.code}: {e.read().decode(errors='replace')[:300]}")
         sys.exit(1)
@@ -200,6 +217,19 @@ def check(asset, a, st, cfg):
     return None, st
 
 
+def check_low(asset, a, st, cfg):
+    """เหมือน check แต่ฝั่งโลเดิม · คืน (การ์ด หรือ None, state ใหม่)"""
+    same_level = st.get("pl") is not None and abs(st["pl"] - a["pl"]) <= cfg["same"]
+    if a["close"] < a["pl"]:
+        if same_level and st.get("kind") == "near":
+            return card(asset, "break", a, cfg, "low"), {**st, "kind": "break"}
+        return None, st
+    if a["pos_low"] <= 1 - NEAR and not same_level:
+        return card(asset, "near", a, cfg, "low"), {"pl": round(a["pl"], 4), "kind": "near",
+                                                    "t_utc": a["t"].isoformat()}
+    return None, st
+
+
 def output(messages):
     os.makedirs("output", exist_ok=True)
     with open("output/prev_high_message.json", "w", encoding="utf-8") as fh:
@@ -212,7 +242,7 @@ def main():
         msgs = []
         for asset, cfg in CFG.items():
             a = analyse(bars_15m(asset, now - LOOKBACK - timedelta(hours=2)), now)
-            msgs.append(card(asset, "test", a, cfg) if a else no_data_card(asset, cfg))
+            msgs += [card(asset, "test", a, cfg), card(asset, "test", a, cfg, "low")] if a else [no_data_card(asset, cfg)]
         output(msgs)
         send(msgs)
         return
@@ -227,12 +257,16 @@ def main():
         if a is None:
             print(f"{asset}: ข้อมูลไม่พอ / ตลาดปิด")
             continue
-        print(f"{asset}: ไฮ 8 ชม. {a['ph']:.2f} โลว์ {a['pl']:.2f} ล่าสุด {a['close']:.2f} ตำแหน่ง {a['pos']:.2f}")
+        print(f"{asset}: ไฮ 8 ชม. {a['ph']:.2f} โลว์ {a['pl']:.2f} ล่าสุด {a['close']:.2f} "
+              f"ตำแหน่งไฮ {a['pos']:.2f} ตำแหน่งโลว์ {a['pos_low']:.2f}")
         msg, state[asset] = check(asset, a, state.get(asset, {}), cfg)
         if msg:
             msgs.append(msg)
+        msg, state[f"{asset}_low"] = check_low(asset, a, state.get(f"{asset}_low", {}), cfg)
+        if msg:
+            msgs.append(msg)
     if not msgs:
-        print("ยังไม่มีราคาใกล้ไฮเดิม")
+        print("ยังไม่มีราคาใกล้ไฮเดิม/โลเดิม")
         return
     output(msgs)
     if os.environ.get("DRY_RUN"):
