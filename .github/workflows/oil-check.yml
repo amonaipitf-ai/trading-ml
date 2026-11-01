@@ -1,0 +1,42 @@
+name: Oil source check (temporary)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Compare WTI feeds
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+        run: |
+          python - <<'EOF'
+          import json, os, urllib.parse, urllib.request
+          import yfinance as yf, pandas as pd
+          pd.set_option("display.width", 200)
+          for t in ["CL=F", "CLZ26.NYM", "CLF27.NYM", "BZ=F"]:
+              try:
+                  d = yf.Ticker(t).history(period="10d", interval="1d")
+                  print(t, "daily close:", d["Close"].round(2).tail(6).to_dict())
+              except Exception as e:
+                  print(t, "fail", e)
+          h = yf.Ticker("CL=F").history(period="5d", interval="1h")
+          print("CL=F hourly (last 14):")
+          print(h[["Open", "High", "Low", "Close"]].round(2).tail(14))
+          key = os.environ.get("TWELVEDATA_API_KEY", "")
+          for s in ["WTI/USD", "CL", "USOIL", "XTI/USD", "WTICO/USD"]:
+              q = urllib.parse.urlencode({"symbol": s, "interval": "1day", "outputsize": 4, "apikey": key})
+              try:
+                  r = json.loads(urllib.request.urlopen(f"https://api.twelvedata.com/time_series?{q}", timeout=30).read())
+                  print("twelvedata", s, r.get("status"), str(r.get("values", r.get("message")))[:300])
+              except Exception as e:
+                  print("twelvedata", s, "fail", e)
+          EOF
