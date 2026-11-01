@@ -60,7 +60,12 @@ def from_yahoo_hourly(ticker: str) -> pd.DataFrame:
     h = pd.DataFrame({"datetime": df.index.astype(str), "open": df["Open"].values, "high": df["High"].values,
                       "low": df["Low"].values, "close": df["Close"].values})
     keep_hourly(f"yahoo_h:{ticker}", h)
-    return hourly_to_daily(h)
+    d = hourly_to_daily(h)
+    try:   # แท่ง 1 ชม. ของ Yahoo ย้อนได้แค่ 60 วัน -> เติมแท่งรายวันเก่ากว่านั้นให้ MA50/MA200 คำนวณได้
+        d = extend_daily(d, from_yahoo(ticker))
+    except Exception as e:
+        print(f"  {ticker}: เติมแท่งรายวันย้อนหลังไม่ได้ ({type(e).__name__})")
+    return d
 
 
 def fix_settlement_stamp(ticker: str, hourly: pd.DataFrame) -> pd.DataFrame:
@@ -120,7 +125,29 @@ def from_twelvedata(symbol: str) -> pd.DataFrame:
         raise RuntimeError(f"twelvedata: {str(data.get('message', ''))[:120]}")
     h = pd.DataFrame(data["values"])
     keep_hourly(f"twelvedata:{symbol}", h)
-    return hourly_to_daily(h)
+    d = hourly_to_daily(h)
+    try:   # แท่ง 1 ชม. ย้อนได้ ~150 วันทำการ -> เติมแท่งรายวันเก่ากว่านั้นให้ MA200 คำนวณได้
+        q = urllib.parse.urlencode({"symbol": symbol, "interval": "1day", "outputsize": 600,
+                                    "timezone": "America/New_York", "apikey": key})
+        dd = json.loads(urllib.request.urlopen(f"https://api.twelvedata.com/time_series?{q}", timeout=60).read())
+        if dd.get("status") == "ok":
+            older = pd.DataFrame(dd["values"])
+            older.index = pd.to_datetime(older["datetime"])
+            older = older[["open", "high", "low", "close"]].astype(float).sort_index()
+            older.columns = ["Open", "High", "Low", "Close"]
+            d = extend_daily(d, older)
+    except Exception as e:
+        print(f"  twelvedata {symbol}: เติมแท่งรายวันย้อนหลังไม่ได้ ({type(e).__name__})")
+    return d
+
+
+def extend_daily(recent: pd.DataFrame, older: pd.DataFrame) -> pd.DataFrame:
+    """ต่อแท่งรายวันเก่า (ก่อนวันแรกของ recent) ไว้ด้านหน้า · แท่งล่าสุดยังมาจาก recent เหมือนเดิม"""
+    if recent.empty or older.empty:
+        return recent
+    older = older[older.index.dayofweek < 5]
+    older = older[older.index < recent.index.min()][["Open", "High", "Low", "Close"]]
+    return pd.concat([older, recent]).sort_index()
 
 
 def hourly_to_daily(h: pd.DataFrame, now_ny=None) -> pd.DataFrame:
@@ -319,13 +346,21 @@ def draw_chart_h1(asset: str, h: pd.DataFrame, row: dict, path: str, days: int =
     ax.axvspan(x0, x1, color="#f1f3f4", lw=0)
     ax.text((x0 + x1) / 2, 1.0, "TODAY", transform=ax.get_xaxis_transform(), ha="center", va="bottom",
             fontsize=8, color="#5f6368")
+    levels_ = []   # ระดับที่ค่าเท่ากัน (เช่น R1 = Pivot) รวมเป็นป้ายเดียว ไม่ให้ตัวหนังสือทับกัน
     for key, col, lab in (("resistance_2", "#d93025", "R2"), ("resistance_1", "#ea8600", "R1"),
                           ("P", "#5f6368", "P"),
                           ("support_1", "#188038", "S1"), ("support_2", "#0b8043", "S2")):
         val = row.get(key)
-        if val:
-            ax.hlines(val, x0, x1, colors=col, linestyles="--", lw=1)
-            ax.text(x1 + 0.5, val, f"{lab} {val}", va="center", fontsize=8, color=col)
+        if val is None or pd.isna(val):
+            continue
+        same = next((x for x in levels_ if abs(x[0] - float(val)) < 1e-9), None)
+        if same:
+            same[1] += f" = {lab}"
+        else:
+            levels_.append([float(val), lab, col])
+    for val, lab, col in levels_:
+        ax.hlines(val, x0, x1, colors=col, linestyles="--", lw=1)
+        ax.text(x1 + 0.5, val, f"{lab} {val:g}", va="center", fontsize=8, color=col)
     ax.set_xticks(starts)
     ax.set_xticklabels([v.loc[i, "th"].strftime("%a %d %b") for i in starts], fontsize=8)
     ax.set_xlim(-1, x1 + 11)
