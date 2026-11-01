@@ -22,15 +22,12 @@ jobs:
           import json, os, urllib.parse, urllib.request
           import yfinance as yf, pandas as pd
           pd.set_option("display.width", 200)
-          for t in ["CL=F", "CLZ26.NYM", "CLF27.NYM", "BZ=F"]:
-              try:
-                  d = yf.Ticker(t).history(period="10d", interval="1d")
-                  print(t, "daily close:", d["Close"].round(2).tail(6).to_dict())
-              except Exception as e:
-                  print(t, "fail", e)
-          h = yf.Ticker("CL=F").history(period="5d", interval="1h")
-          print("CL=F hourly (last 14):")
-          print(h[["Open", "High", "Low", "Close"]].round(2).tail(14))
+          for iv in ["1h", "30m", "15m", "5m"]:
+              d = yf.Ticker("CL=F").history(period="5d", interval=iv, prepost=True)
+              d = d[["Open", "High", "Low", "Close"]].round(2)
+              for day in ["2026-10-29", "2026-10-30"]:
+                  x = d[d.index.strftime("%Y-%m-%d") == day]
+                  print(iv, day, "last bars:"); print(x.tail(4).to_string())
           key = os.environ.get("TWELVEDATA_API_KEY", "")
           for s in ["WTI/USD", "CL", "USOIL", "XTI/USD", "WTICO/USD"]:
               q = urllib.parse.urlencode({"symbol": s, "interval": "1day", "outputsize": 4, "apikey": key})
