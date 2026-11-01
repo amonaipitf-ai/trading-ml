@@ -11,7 +11,7 @@
 เกณฑ์ 0.90 มาจากผลเทรดจริง 12–21 ต.ค. 2026: Short ที่ไฮเดิมได้กำไร ส่วน Short ตอนราคาทะลุไฮ / กลางกรอบ ขาดทุน
 
 แจ้งครั้งเดียวต่อไฮหนึ่งระดับ · จำไว้ใน data/prev_high_state.json
-ไม่ส่งช่วง 23:00–05:59 น. เวลาไทย · ส่งแบบไม่มีเสียงเตือน · ส่งเป็นการ์ด (LINE Flex) โทนเดียวกับสรุปเช้า
+ไม่ส่งช่วง 00:00–04:59 น. เวลาไทย · ส่งแบบไม่มีเสียงเตือน · ส่งเป็นการ์ด (LINE Flex) โทนเดียวกับสรุปเช้า
 ทดสอบโดยไม่ส่งจริง: DRY_RUN=1 python3 prev_high_watch.py  (บันทึกการ์ดไว้ที่ output/prev_high_message.json)
 ทดสอบส่ง LINE จริงทันที (ไม่สนช่วงงดแจ้ง/เกณฑ์ ไม่บันทึก state): TEST_SEND=1 python3 prev_high_watch.py
 ใช้แค่ไลบรารีมาตรฐาน
@@ -28,7 +28,7 @@ from market import bars_15m
 
 STATE = "data/prev_high_state.json"
 TH = timezone(timedelta(hours=7))
-QUIET = (23, 6)                 # ไม่แจ้ง 23:00–05:59 น. (ผลเทรด 00–06 น. แย่ที่สุด)
+QUIET = (24, 5)                 # ไม่แจ้ง 00:00–04:59 น. เวลาไทย
 LOOKBACK = timedelta(hours=8)   # ไฮเดิม = จุดสูงสุดของ 8 ชม. ก่อนแท่งล่าสุด
 NEAR = 0.90                     # ตำแหน่งในกรอบที่ถือว่า "ใกล้ไฮเดิม"
 BAR = timedelta(minutes=15)
@@ -218,7 +218,7 @@ def main():
         return
     hour = now.astimezone(TH).hour
     if hour >= QUIET[0] or hour < QUIET[1]:
-        print("ช่วงเวลางดแจ้งเตือน (23:00–06:00 น.)")
+        print("ช่วงเวลางดแจ้งเตือน (00:00–05:00 น.)")
         return
     state = load_state()
     msgs = []

@@ -91,7 +91,7 @@ def save_state(state):
     os.replace(tmp, STATE_FILE)
 
 
-# ---------------------------------------------------------------- LINE (เงียบ, ไม่ส่ง 23:00–05:00)
+# ---------------------------------------------------------------- LINE (เงียบ, ไม่ส่ง 00:00–05:00)
 OUTBOX = []
 
 
@@ -111,7 +111,7 @@ def flush_outbox(cfg, state):
             state["outbox"] = []          # ไม่มี token: เก็บแค่ใน log
         return
     hour = datetime.now(TH).hour
-    if hour >= 23 or hour < 5:
+    if hour < 5:
         return                             # ช่วงนอน: เก็บไว้ส่งรอบถัดไป
     text = "🤖 บอทเทรด (Demo)\n" + "\n".join(box)
     payload = {"messages": [{"type": "text", "text": text[:4900]}], "notificationDisabled": True}

@@ -17,7 +17,7 @@ from plan_track import evaluate_side, load_plans
 STATE = "data/watch_state.json"
 TH = timezone(timedelta(hours=7))
 MAX_AGE = timedelta(hours=30)   # แผนเก่ากว่านี้ไม่เฝ้าแล้ว
-QUIET = (23, 5)                 # ไม่ส่งแจ้งเตือนช่วง 23:00–04:59 น. เวลาไทย
+QUIET = (24, 5)                 # ไม่ส่งแจ้งเตือนช่วง 00:00–04:59 น. เวลาไทย
 
 
 def f(v, dec):
@@ -75,7 +75,7 @@ def send(texts):
 def main():
     hour = datetime.now(TH).hour
     if hour >= QUIET[0] or hour < QUIET[1]:
-        print("ช่วงเวลางดแจ้งเตือน (23:00–05:00 น.)")
+        print("ช่วงเวลางดแจ้งเตือน (00:00–05:00 น.)")
         return
     plans = load_plans()
     if not plans:
