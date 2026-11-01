@@ -459,6 +459,14 @@ def main():
             h1 = hourly_for(asset, src)
             if h1 is None:
                 raise RuntimeError("ไม่มีแท่ง H1")
+            # ระยะแกว่งรายชั่วโมง 5 วันล่าสุด -> SL ขั้นต่ำที่ไม่โดนการแกว่งปกติกระชาก
+            pc = h1["Close"].shift()
+            tr = pd.concat([h1["High"] - h1["Low"], (h1["High"] - pc).abs(), (h1["Low"] - pc).abs()], axis=1).max(axis=1)
+            recent = tr.tail(110)
+            dd = DECIMALS[asset]
+            row["atr_h1"] = round(float(recent.mean()), dd)
+            row["tr_h1_p90"] = round(float(recent.quantile(0.9)), dd)
+            row["sl_min"] = round(1.5 * float(recent.mean()), dd)   # SL ขั้นต่ำแนะนำ = 1.5 × ATR(H1)
             draw_chart_h1(asset, h1, row, os.path.join(charts, f"{asset}.png"))
         except Exception as e:
             print(f"  วาดกราฟ H1 {asset} ไม่สำเร็จ ({e}) — ใช้ D1 แทน")
