@@ -212,6 +212,20 @@ def news_box(asset, cal):
     return [head, *rows, warn]
 
 
+USD_PER_UNIT_001 = {"XAUUSD": 1.0, "USOIL": 10.0, "DXY": 10.0}   # กำไร/ขาดทุนต่อราคาขยับ 1.00 ที่ 0.01 ล็อต (Exness)
+
+
+def sl_line(row, m):
+    """SL ขั้นต่ำวันนี้ = 1.5 × ATR H1 (ระยะแกว่งรายชั่วโมง 5 วันล่าสุด) + ความเสี่ยงที่ 0.01 ล็อต"""
+    v = row.get("sl_min")
+    if v is None or pd.isna(v):
+        return []
+    risk = float(v) * USD_PER_UNIT_001.get(row["asset"], 0)
+    return [txt(f"🛡 SL ขั้นต่ำวันนี้ ≥ {f(float(v), m['dec'])} (1.5×ATR H1)"
+                + (f" · 0.01 ล็อต เสี่ยง ≈ {risk:,.0f} USD" if risk else ""),
+                size="xs", color=m["accent"], weight="bold")]
+
+
 def bubble(row, cal):
     m = META[row["asset"]]
     dec = m["dec"]
@@ -234,6 +248,7 @@ def bubble(row, cal):
             txt(f(float(row["close"]), 2), color=TEXT, weight="bold", size="lg", align="end", flex=6),
         ]},
         txt(f"Pivot {f(float(row['P']), dec)} · ATR {row['atr14']}", size="xs", color=MUTED),
+        *sl_line(row, m),
         {"type": "separator", "color": "#1E2636", "margin": "md"},
         txt("แนวรับ–แนวต้าน", color=m["accent"], weight="bold", margin="md"),
         *zones,
