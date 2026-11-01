@@ -112,6 +112,9 @@ def load(asset: str):
         try:
             df = fetch(kind, sym)
             df = df[(df["High"] >= df["Low"]) & (df["Close"] > 0)]
+            # ตัดแท่งเสาร์–อาทิตย์ (UTC) ทิ้ง: บางแหล่งมีแท่งสั้นๆ ไม่กี่นาทีช่วงตลาดปิด/เปิด
+            # ทำให้ Pivot/แนวรับ–แนวต้านแคบผิดปกติ (เช่น XAUUSD แท่ง 31 ต.ค. 2026 สูง–ต่ำห่างแค่ 1.35)
+            df = df[df.index.dayofweek < 5]
             # ต้องมีข้อมูลพอและไม่เก่าเกิน 5 วัน
             if len(df) >= 30 and (pd.Timestamp.now("UTC").tz_localize(None) - df.index[-1]).days <= 5:
                 return df, f"{kind}:{sym}"
