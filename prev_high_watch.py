@@ -261,6 +261,26 @@ def check_low(asset, a, st, cfg):
     return None, st
 
 
+def demo_cards(now):
+    """การ์ดตัวอย่าง USOIL ครบทุกจังหวะ จากตัวเลขจำลอง (ใช้ตอนทดสอบขณะตลาดปิด)"""
+    cfg = CFG["USOIL"]
+    t = now - BAR
+    def a(close, o, ph=103.40, pl=101.20, rh=103.38, rl=101.22):
+        return {"t": t, "open": o, "high": max(o, close), "low": min(o, close), "close": close,
+                "ph": ph, "pl": pl, "prev_high": 0, "prev_low": 0, "recent_high": rh, "recent_low": rl,
+                "pos": (max(o, close) - pl) / (ph - pl), "pos_low": (min(o, close) - pl) / (ph - pl)}
+    cards = [card("USOIL", "near", a(103.22, 103.05), cfg),
+             card("USOIL", "confirm", a(102.98, 103.30), cfg),
+             card("USOIL", "break", a(103.55, 103.20), cfg),
+             card("USOIL", "near", a(101.38, 101.60), cfg, "low"),
+             card("USOIL", "confirm", a(101.62, 101.30), cfg, "low")]
+    for c in cards:      # ติดป้ายตัวอย่างให้ชัด
+        c["altText"] = "🧪 ตัวอย่าง · " + c["altText"]
+        c["contents"]["body"]["contents"].insert(0, txt("🧪 ตัวอย่าง — ข้อมูลจำลอง ไม่ใช่สัญญาณจริง",
+                                                         size="xs", color=YELLOW, weight="bold"))
+    return cards
+
+
 def output(messages):
     os.makedirs("output", exist_ok=True)
     with open("output/prev_high_message.json", "w", encoding="utf-8") as fh:
@@ -273,9 +293,12 @@ def main():
         msgs = []
         for asset, cfg in CFG.items():
             a = analyse(bars_15m(asset, now - LOOKBACK - timedelta(hours=2)), now)
-            msgs += [card(asset, "test", a, cfg), card(asset, "test", a, cfg, "low")] if a else [no_data_card(asset, cfg)]
+            if a:
+                msgs += [card(asset, "test", a, cfg), card(asset, "test", a, cfg, "low")]
+        if not msgs:          # ตลาดปิด -> ส่งการ์ดตัวอย่างครบทุกจังหวะ (ข้อมูลจำลอง)
+            msgs = demo_cards(now)
         output(msgs)
-        send(msgs)
+        send(msgs[:5])
         return
     hour = now.astimezone(TH).hour
     if hour >= QUIET[0] or hour < QUIET[1]:
