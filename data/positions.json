@@ -1,0 +1,17 @@
+[
+ {
+  "id": "usoil-buy-20261101",
+  "asset": "USOIL",
+  "side": "buy",
+  "lots": 0.07,
+  "entry": 102.74,
+  "contract": 1000,
+  "opened_utc": "2026-11-01T13:40:00+00:00",
+  "active": true,
+  "alerts": [
+   {"price": 101.90, "label": "S1"},
+   {"price": 100.93, "label": "S2"},
+   {"price": 104.42, "label": "R1"}
+  ]
+ }
+]

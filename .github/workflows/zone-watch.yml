@@ -46,12 +46,21 @@ jobs:
           TEST_SEND: ${{ inputs.test && '1' || '' }}
         run: python3 prev_high_watch.py
 
+      - name: เฝ้าออเดอร์ที่ถืออยู่ (data/positions.json)
+        if: always()
+        continue-on-error: true
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+        run: python3 position_watch.py
+
       - name: จำว่าแจ้งเตือนไปแล้ว
         if: always()
         run: |
           git config user.name "forecast-bot"
           git config user.email "forecast-bot@users.noreply.github.com"
-          for f in data/watch_state.json data/prev_high_state.json; do [ -f "$f" ] && git add "$f"; done
+          for f in data/watch_state.json data/prev_high_state.json data/position_state.json; do [ -f "$f" ] && git add "$f"; done
           git diff --cached --quiet && exit 0
           git commit -m "watch $(date -u +%Y-%m-%dT%H:%M)"
           git pull --rebase --autostash -q && git push -q
