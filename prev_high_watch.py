@@ -11,6 +11,10 @@
     (ส่งเฉพาะเมื่อเคยแจ้ง "ใกล้ไฮเดิม" ของไฮนั้นไปแล้ว)
 เกณฑ์ 0.90 มาจากผลเทรดจริง 12–21 ต.ค. 2026: Short ที่ไฮเดิมได้กำไร ส่วน Short ตอนราคาทะลุไฮ / กลางกรอบ ขาดทุน
 
+แจ้ง 2 จังหวะ (เพิ่ม 1 พ.ย. 2026): หลังแจ้ง "ใกล้ไฮ/โลว์" ถ้าภายใน 3 ชม. มีแท่ง M15 กลับตัว
+  (Short: ปิดแดง และต่ำกว่าโลว์ของแท่งก่อน · Buy: ปิดเขียว และสูงกว่าไฮของแท่งก่อน) โดยยังไม่ทะลุ/หลุดระดับ
+  -> การ์ด "✅ ยืนยัน" พร้อม SL/TP/ความเสี่ยงจากราคาตอนยืนยัน · ทะลุ/หลุดหลังยืนยัน -> การ์ดเตือนสีแดง
+
 ฝั่งโลเดิม (กลับด้าน):
   - ตำแหน่ง ≤ 0.10 และแท่งปิดไม่ต่ำกว่าโลเดิม -> การ์ดสีเขียว "ใกล้โลเดิม" (จังหวะรอสัญญาณ Buy)
   - แท่งปิดใต้โลเดิม (หลังเคยแจ้งใกล้โลว์นั้น) -> การ์ดสีแดง "หลุดโลว์ — ไม่ Buy"
@@ -38,6 +42,7 @@ QUIET = (24, 5)                 # ไม่แจ้ง 00:00–04:59 น. เ�
 LOOKBACK = timedelta(hours=8)   # ไฮเดิม = จุดสูงสุดของ 8 ชม. ก่อนแท่งล่าสุด
 NEAR = 0.90                     # ตำแหน่งในกรอบที่ถือว่า "ใกล้ไฮเดิม"
 BAR = timedelta(minutes=15)
+CONFIRM_WINDOW = timedelta(hours=3)   # แท่งยืนยันต้องเกิดภายใน 3 ชม. หลังแจ้ง "ใกล้"
 MAX_RISK_USD = 14.0             # เสี่ยงไม่เกินราว 1% ของพอร์ตต่อไม้
 
 # usd_per_unit = กำไร/ขาดทุนต่อราคาขยับ 1.00 ที่ขนาดไม้นี้ (จากประวัติเทรดจริงใน Exness)
@@ -78,7 +83,11 @@ def analyse(bars, now):
     pl = min(b[3] for b in prior)
     if ph <= pl:
         return None
-    return {"t": t, "high": h, "low": l, "close": c, "ph": ph, "pl": pl,
+    pt, po, phh, pll, pc = done[-2]
+    recent = done[-4:]
+    return {"t": t, "open": o, "high": h, "low": l, "close": c, "ph": ph, "pl": pl,
+            "prev_high": phh, "prev_low": pll,
+            "recent_high": max(b[2] for b in recent), "recent_low": min(b[3] for b in recent),
             "pos": (h - pl) / (ph - pl),          # ไฮแท่งล่าสุดอยู่ตรงไหนของกรอบ (ใช้กับไฮเดิม)
             "pos_low": (l - pl) / (ph - pl)}      # โลว์แท่งล่าสุดอยู่ตรงไหนของกรอบ (ใช้กับโลเดิม)
 
@@ -101,8 +110,10 @@ def card(asset, kind, a, cfg, side="high"):
     """kind: near | break | test · side: high (ไฮเดิม/Short) | low (โลเดิม/Buy)"""
     dec = cfg["dec"]
     hi = side == "high"
-    color = {"near": ORANGE if hi else GREEN, "break": RED, "test": MUTED}[kind]
+    color = {"near": ORANGE if hi else GREEN, "confirm": RED if hi else GREEN,
+             "break": RED, "test": MUTED}[kind]
     badge = {"near": "ใกล้ไฮเดิม" if hi else "ใกล้โลเดิม",
+             "confirm": "✅ ยืนยัน Short" if hi else "✅ ยืนยัน Buy",
              "break": "ทะลุไฮ — ไม่ Short" if hi else "หลุดโลว์ — ไม่ Buy", "test": "🧪 ทดสอบ"}[kind]
     when = (a["t"] + BAR).astimezone(TH)
     level = a["ph"] if hi else a["pl"]
@@ -125,7 +136,10 @@ def card(asset, kind, a, cfg, side="high"):
              ]},
         ]
     else:
-        sl = (a["ph"] + cfg["buffer"]) if hi else (a["pl"] - cfg["buffer"])
+        if kind == "confirm":   # SL เหนือ/ใต้จุดสุดของช่วงที่ราคาทดสอบไฮ/โลว์
+            sl = (max(a["ph"], a["recent_high"]) + cfg["buffer"]) if hi else (min(a["pl"], a["recent_low"]) - cfg["buffer"])
+        else:
+            sl = (a["ph"] + cfg["buffer"]) if hi else (a["pl"] - cfg["buffer"])
         tp = (a["ph"] + a["pl"]) / 2
         risk = abs(sl - a["close"]) * cfg["usd_per_unit"]
         plan = [
@@ -137,7 +151,9 @@ def card(asset, kind, a, cfg, side="high"):
         if risk > MAX_RISK_USD:
             plan.append(txt(f"⚠ เสี่ยงเกิน 14 USD — ลดไม้ หรือรอราคาใกล้{word}กว่านี้", size="xs", color=YELLOW))
         tips = [
-            txt("✅ รอแท่ง M15 กลับตัวก่อนเข้า", size="sm", margin="md"),
+            txt(f"✅ แท่ง M15 ปิด{'แดง ต่ำกว่าโลว์' if hi else 'เขียว สูงกว่าไฮ'}แท่งก่อนแล้ว · ครบเงื่อนไขตามกติกา"
+                if kind == "confirm" else "⏳ รอแท่ง M15 กลับตัว — ระบบจะแจ้ง ✅ ยืนยัน อีกครั้ง",
+                size="sm", margin="md"),
             txt(f"⛔ แท่งปิด{'เหนือไฮ' if hi else 'ใต้โลว์'} = ไม่ {'Short' if hi else 'Buy'}", size="sm"),
         ]
         if not hi:
@@ -204,13 +220,25 @@ def send(messages):
         sys.exit(1)
 
 
+def confirm_ok(a, st):
+    """แท่งล่าสุดเกิดหลังแท่งที่แจ้ง "ใกล้" และยังอยู่ในหน้าต่างเวลา"""
+    try:
+        t_near = datetime.fromisoformat(st["t_utc"])
+    except (KeyError, ValueError):
+        return False
+    return t_near < a["t"] <= t_near + CONFIRM_WINDOW
+
+
 def check(asset, a, st, cfg):
     """คืน (การ์ด หรือ None, state ใหม่ของตัวนี้)"""
     same_level = st.get("ph") is not None and abs(st["ph"] - a["ph"]) <= cfg["same"]
     if a["close"] > a["ph"]:
-        if same_level and st.get("kind") == "near":
+        if same_level and st.get("kind") in ("near", "confirmed"):
             return card(asset, "break", a, cfg), {**st, "kind": "break"}
         return None, st
+    if same_level and st.get("kind") == "near" and confirm_ok(a, st) \
+            and a["close"] < a["open"] and a["close"] < a["prev_low"]:
+        return card(asset, "confirm", a, cfg), {**st, "kind": "confirmed", "confirm_utc": a["t"].isoformat()}
     if a["pos"] >= NEAR and not same_level:
         return card(asset, "near", a, cfg), {"ph": round(a["ph"], 4), "kind": "near",
                                              "t_utc": a["t"].isoformat()}
@@ -221,9 +249,12 @@ def check_low(asset, a, st, cfg):
     """เหมือน check แต่ฝั่งโลเดิม · คืน (การ์ด หรือ None, state ใหม่)"""
     same_level = st.get("pl") is not None and abs(st["pl"] - a["pl"]) <= cfg["same"]
     if a["close"] < a["pl"]:
-        if same_level and st.get("kind") == "near":
+        if same_level and st.get("kind") in ("near", "confirmed"):
             return card(asset, "break", a, cfg, "low"), {**st, "kind": "break"}
         return None, st
+    if same_level and st.get("kind") == "near" and confirm_ok(a, st) \
+            and a["close"] > a["open"] and a["close"] > a["prev_high"]:
+        return card(asset, "confirm", a, cfg, "low"), {**st, "kind": "confirmed", "confirm_utc": a["t"].isoformat()}
     if a["pos_low"] <= 1 - NEAR and not same_level:
         return card(asset, "near", a, cfg, "low"), {"pl": round(a["pl"], 4), "kind": "near",
                                                     "t_utc": a["t"].isoformat()}
