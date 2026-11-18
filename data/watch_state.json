@@ -1,22 +1,16 @@
 {
  "XAUUSD": {
-  "created_utc": "2026-11-17T04:10:42+00:00",
+  "created_utc": "2026-11-18T03:07:38+00:00",
+  "sent": []
+ },
+ "USOIL": {
+  "created_utc": "2026-11-18T03:07:38+00:00",
   "sent": [
-   "sell",
    "buy"
   ]
  },
- "USOIL": {
-  "created_utc": "2026-11-17T04:10:42+00:00",
-  "sent": [
-   "sell"
-  ]
- },
  "DXY": {
-  "created_utc": "2026-11-17T04:10:42+00:00",
-  "sent": [
-   "buy",
-   "sell"
-  ]
+  "created_utc": "2026-11-18T03:07:38+00:00",
+  "sent": []
  }
 }
